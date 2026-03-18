@@ -1,6 +1,6 @@
 ---
-updated: 2026-03-18T14:52:46.663Z
-total_entries: 1
+updated: 2026-03-18T14:52:56.310Z
+total_entries: 2
 ---
 
 # Loom System Index
@@ -13,7 +13,7 @@ total_entries: 1
 
 ## Decisions
 
-_No entries yet._
+- [Why MCP Over VS Code Plugin](decisions/why-mcp-over-vs-code-plugin.md) — tags: decision, mcp, architecture, vs-code — updated: 2026-03-18T14:52:56.309Z
 
 ## Threads
 
