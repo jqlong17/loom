@@ -1,6 +1,6 @@
 ---
-updated: 2026-03-18T15:20:06.087Z
-total_entries: 9
+updated: 2026-03-18T17:23:16.484Z
+total_entries: 10
 ---
 
 # Loom System Index
@@ -23,4 +23,5 @@ total_entries: 9
 ## Threads
 
 - [Founding Conversation Summary](threads/founding-conversation-summary.md) — tags: founding, history, milestone, conversation — updated: 2026-03-18T14:53:57.033Z
+- [Install Scope Policy and OpenClaw Integration Iteration](threads/install-scope-policy-and-openclaw-integration-iteration.md) — tags: openclaw, install-policy, project-first, automation, release — updated: 2026-03-18T17:23:16.479Z
 - [Why Loom Memory Did Not Update Automatically](threads/why-loom-memory-did-not-update-automatically.md) — tags: memory, behavior, operations, faq — updated: 2026-03-18T15:20:06.083Z
