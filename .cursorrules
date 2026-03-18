@@ -50,9 +50,11 @@ Proactively call `loom_weave` when any of the following happen during our conver
 
 - When user intent has ambiguity (goal/scope/constraints/acceptance not explicit)
 - When new request may conflict with existing concepts/decisions
-- First call `loom_probe` to generate proactive questions
-- Ask the user those questions in chat
-- After user replies, call `loom_probe` with `record=true` and `answers` to persist Q&A into Loom
+- Prefer state-machine flow:
+  1) call `loom_probe_start` to generate questions and create `session_id`
+  2) ask the user these questions in chat
+  3) call `loom_probe_commit` with `session_id` + `answers` to persist Q&A
+- `loom_probe` can still be used as compatibility wrapper (`record=true/false`)
 
 ## When to DEPRECATE (loom_deprecate)
 
@@ -82,6 +84,9 @@ Proactively call `loom_weave` when any of the following happen during our conver
 
 - Always include meaningful tags for better retrieval
 - For foundational concepts, include `core` tag (or set `is_core=true`)
+- For `concepts` / `decisions`, prefer adding:
+  - `domain` (macro business/technical area)
+  - `links` (related entry paths) to form graph edges
 - Keep entries focused: one topic per entry
 - Prefer structured Markdown with `##` headings
 - For threads: summarize key points, don't dump raw conversation

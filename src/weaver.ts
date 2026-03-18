@@ -10,6 +10,8 @@ export interface KnowledgeEntry {
   category: LoomCategory;
   content: string;
   tags?: string[];
+  links?: string[];
+  domain?: string;
   mode?: WeaveMode;
 }
 
@@ -17,6 +19,8 @@ interface Frontmatter {
   created?: string;
   updated: string;
   tags: string;
+  links?: string;
+  domain?: string;
   category: string;
   status: "active" | "deprecated";
   superseded_by?: string;
@@ -31,10 +35,14 @@ function buildFrontmatter(
     created: existing?.created ?? now,
     updated: now,
     tags: entry.tags?.join(", ") ?? "none",
+    links: entry.links?.join(", ") ?? existing?.links,
+    domain: entry.domain ?? existing?.domain,
     category: entry.category,
     status: "active",
   };
-  const lines = Object.entries(fm).map(([k, v]) => `${k}: ${v}`);
+  const lines = Object.entries(fm)
+    .filter(([, v]) => v !== undefined && v !== "")
+    .map(([k, v]) => `${k}: ${v}`);
   return `---\n${lines.join("\n")}\n---`;
 }
 
@@ -141,6 +149,8 @@ interface KnowledgeRecord {
   category: LoomCategory;
   filePath: string;
   tags: string[];
+  links: string[];
+  domain?: string;
   status: "active" | "deprecated" | "unknown";
   updated: string;
 }
@@ -325,6 +335,22 @@ function parseTags(tagsRaw: string): string[] {
     .filter(Boolean);
 }
 
+function parseLinks(linksRaw: string): string[] {
+  if (!linksRaw || linksRaw === "none") return [];
+  return linksRaw
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function normalizeLinkPath(link: string): string {
+  let p = link.trim();
+  if (p.startsWith("./")) p = p.slice(2);
+  if (p.endsWith(".md")) return p;
+  if (p.split("/").length === 2) return `${p}.md`;
+  return p;
+}
+
 function normalizeTitle(title: string): string {
   return title
     .toLowerCase()
@@ -366,6 +392,8 @@ async function loadRecords(
         category: cat,
         filePath: path.relative(loomRoot, absPath),
         tags: parseTags(fm?.tags ?? ""),
+        links: parseLinks(fm?.links ?? "").map(normalizeLinkPath),
+        domain: fm?.domain,
         status:
           fm?.status === "active" || fm?.status === "deprecated"
             ? fm.status
@@ -379,7 +407,14 @@ async function loadRecords(
 }
 
 export interface ReflectIssue {
-  type: "conflict" | "stale" | "missing_tags" | "merge_candidate" | "deprecated";
+  type:
+    | "conflict"
+    | "stale"
+    | "missing_tags"
+    | "merge_candidate"
+    | "deprecated"
+    | "isolated_node"
+    | "dangling_link";
   reason: string;
   files: string[];
 }
@@ -481,6 +516,42 @@ export async function reflect(
       byTag.set(key, list);
     }
   }
+
+  // 6) Graph hygiene: dangling links and isolated nodes.
+  const existingPaths = new Set(records.map((r) => r.filePath));
+  const incomingCount = new Map<string, number>();
+  for (const r of records) {
+    incomingCount.set(r.filePath, 0);
+  }
+
+  for (const r of records) {
+    for (const rawLink of r.links) {
+      const target = normalizeLinkPath(rawLink);
+      if (!existingPaths.has(target)) {
+        issues.push({
+          type: "dangling_link",
+          reason: `Entry has dangling link target "${target}": "${r.title}"`,
+          files: [r.filePath],
+        });
+        continue;
+      }
+      incomingCount.set(target, (incomingCount.get(target) ?? 0) + 1);
+    }
+  }
+
+  for (const r of records) {
+    if (r.status !== "active") continue;
+    const outgoing = r.links.filter((l) => existingPaths.has(normalizeLinkPath(l)));
+    const incoming = incomingCount.get(r.filePath) ?? 0;
+    const isCore = r.tags.some((t) => t.toLowerCase() === "core");
+    if (incoming === 0 && outgoing.length === 0 && !isCore) {
+      issues.push({
+        type: "isolated_node",
+        reason: `Entry has no graph links (incoming/outgoing): "${r.title}"`,
+        files: [r.filePath],
+      });
+    }
+  }
   for (const [tag, group] of byTag) {
     if (group.length < 3) continue;
     const topFiles = group.slice(0, 5).map((g) => g.filePath);
@@ -563,6 +634,8 @@ export async function deprecateEntry(
     created: fm?.created ?? now,
     updated: now,
     tags: fm?.tags ?? "none",
+    links: fm?.links ?? "none",
+    domain: fm?.domain ?? "none",
     category,
     status: "deprecated",
   };

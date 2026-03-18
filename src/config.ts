@@ -50,6 +50,7 @@ export async function ensureLoomStructure(loomRoot: string): Promise<void> {
   for (const sub of LOOM_SUBDIRS) {
     await fs.mkdir(path.join(loomRoot, sub), { recursive: true });
   }
+  await fs.mkdir(path.join(loomRoot, "schema"), { recursive: true });
 
   const indexPath = path.join(loomRoot, "index.md");
   try {
@@ -78,6 +79,89 @@ _No decisions yet._
 ## Threads
 
 _No threads yet._
+`,
+    );
+  }
+
+  const technicalSchemaPath = path.join(loomRoot, "schema", "technical.md");
+  try {
+    await fs.access(technicalSchemaPath);
+  } catch {
+    await fs.writeFile(
+      technicalSchemaPath,
+      `# Technical Graph Skeleton
+
+> Macro technical memory backbone. Keep it stable and update incrementally.
+
+## Entities
+
+- Module
+- Service
+- API
+- DataStore
+- TechDecision
+
+## Relations
+
+- depends_on
+- implements
+- owns_data
+- affects
+- supersedes
+
+## Current System Map
+
+- Loom MCP Server -> depends_on -> Weaver Logic
+- Weaver Logic -> depends_on -> Git Sync
+- Loom MCP Server -> exposes -> loom_weave / loom_trace / loom_index / loom_probe_start / loom_probe_commit
+
+## Update Rule
+
+- When adding a new core capability, append one node and at least one edge.
+`,
+    );
+  }
+
+  const businessSchemaPath = path.join(loomRoot, "schema", "business.md");
+  try {
+    await fs.access(businessSchemaPath);
+  } catch {
+    await fs.writeFile(
+      businessSchemaPath,
+      `# Business Graph Skeleton
+
+> Macro business memory backbone for goals, domains, and constraints.
+
+## Domains
+
+- Product Experience
+- Engineering Efficiency
+- Team Collaboration
+
+## Core Objects
+
+- User Request
+- Decision
+- Capability
+- Constraint
+- Outcome
+
+## Relations
+
+- drives
+- constrains
+- enables
+- impacts
+
+## Current Objective Map
+
+- User Request -> drives -> Capability: proactive inquiry memory
+- Capability -> enables -> Engineering Efficiency
+- Constraint: no extra model key -> constrains -> Solution Architecture
+
+## Update Rule
+
+- For each major feature, add "why this matters" edge in this map.
 `,
     );
   }

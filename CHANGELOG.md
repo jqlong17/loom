@@ -22,3 +22,10 @@
 - 新增 Project-First 安装作用域策略与 `INSTALL_POLICY.json`，目的是让 AI 在“全局或项目安装”上按统一规则决策并减少反复确认。
 - 新增 `loom_index` 必读记忆策略（固定最近 5 条 + `core` 概念 + 截断摘要），目的是在控制上下文长度的前提下提升短期记忆稳定性与回答一致性。
 - 新增 `loom_weave` 的 `is_core` 参数与自动 `core` 识别，并同步更新中英文 README 与规则文档，目的是降低基础概念标注成本并确保多客户端读取行为一致。
+
+## 2026-03-19
+
+- 新增 `loom_probe_start` / `loom_probe_commit` 状态机与 `probe_session` 持久化，并保留 `loom_probe` 兼容入口，目的是让“主动提问 -> 用户回答 -> 记忆沉淀”成为可追踪、可恢复的稳定流程。
+- 新增 Memory Lint（写入前校验与统一错误提示格式）并接入 `loom_weave` 与 probe 回写链路，目的是在低成本下提升记忆内容质量与后续检索可用性。
+- 新增 `.loom/schema/technical.md` 与 `.loom/schema/business.md` 初始化骨架，并在 `loom_weave` 支持 `domain/links` 字段，目的是为技术与业务记忆建立统一的宏观图谱主干。
+- 增强 `loom_reflect` 图谱体检（`dangling_link` / `isolated_node`）并在 lint 中提示缺失 `domain/links`，目的是提前发现知识断链与孤岛，降低记忆系统语义漂移风险。

@@ -259,14 +259,16 @@ npm run build
   - `replace`：整体覆盖（默认）
   - `append`：在原内容下追加，不丢失历史
   - `section`：按 `##` 小节替换或新增
+- `loom_weave` 支持图谱骨架字段：
+  - `domain`：宏观归属域（如 `architecture` / `product` / `operations`）
+  - `links`：关联条目路径（如 `concepts/three-layer-architecture`）
 - `loom_trace` 支持 `category`、`tags`、`limit` 参数，便于精准检索
 - `loom_deprecate` 可将旧条目标记为废弃，并可选指向 `superseded_by`
-- `loom_probe` 支持“主动提问 -> 回答回写”闭环：
-  - 第一步：根据当前对话和已有记忆，生成 1~5 条澄清问题
-  - 第二步：收到用户回答后，以 `record=true` 将 Q&A 写入 `threads`
-  - 示例：
-    - 生成问题：`loom_probe(context="当前需求描述", goal="本轮目标")`
-    - 回写回答：`loom_probe(context="当前需求描述", record=true, answers=[{question,answer}])`
+- `loom_probe_start` / `loom_probe_commit` 支持主动提问状态机：
+  - 第一步：`loom_probe_start` 基于当前对话和已有记忆生成 1~5 条澄清问题，并创建 `session_id`
+  - 第二步：用户回答后，调用 `loom_probe_commit(session_id, answers)` 回写到 `threads`
+  - 兼容入口：`loom_probe` 仍可用（内部走 start/commit 流程）
+  - 写入前会执行 Memory Lint；若出现 ERROR 级问题会拒绝写入，并返回修复建议
 - `loom_changelog` 可按日期维护公开 `CHANGELOG.md`：
   - `mode=auto`：自动从当天 git 提交提炼核心变化
   - `mode=manual`：手动传入要公开的核心变化点
@@ -293,6 +295,20 @@ npm run build
 - 当摘要不足以支撑回答时，再按需扩读全文
 - `loom_weave` 支持 `is_core=true`，可强制给基础概念加 `core` 标签
 
+### 4.2 宏观图谱骨架（技术 + 业务）
+
+Loom 初始化后会自动创建：
+
+- `.loom/schema/technical.md`：技术图谱骨架（模块、服务、依赖、影响关系）
+- `.loom/schema/business.md`：业务图谱骨架（目标、约束、能力、结果关系）
+
+建议在写入 `concepts` / `decisions` 时补充 `domain` 与 `links`，以形成稳定知识图谱。
+
+`loom_reflect` 现在会额外检测：
+
+- `dangling_link`：链接目标不存在
+- `isolated_node`：没有任何入边/出边的孤立条目（`core` 条目除外）
+
 ## 工具列表
 
 | Tool | 说明 |
@@ -307,7 +323,9 @@ npm run build
 | `loom_log` | 查看知识变更的 Git 历史 |
 | `loom_deprecate` | 将旧条目标记为 deprecated，并记录废弃原因和替代项 |
 | `loom_reflect` | 执行知识库自检，输出冲突、过期、缺少标签、可合并项 |
-| `loom_probe` | 基于当前对话主动生成澄清问题，并可将用户回答回写到记忆 |
+| `loom_probe_start` | 启动主动提问会话，生成问题并返回 `session_id` |
+| `loom_probe_commit` | 提交会话回答并回写 `threads`，完成状态机闭环 |
+| `loom_probe` | 兼容包装入口（仍支持旧参数） |
 | `loom_changelog` | 维护公开 CHANGELOG（按日期聚合核心变更） |
 | `loom_upgrade` | 升级 Loom MCP 安装本体（从 GitHub 拉取最新） |
 | `loom-cli` | OpenClaw/任意 Agent 可调用的命令行适配层（非 MCP） |
