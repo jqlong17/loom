@@ -1,0 +1,7 @@
+{
+  "loomDir": ".loom",
+  "autoCommit": true,
+  "autoPush": false,
+  "branch": "main",
+  "commitPrefix": "loom"
+}

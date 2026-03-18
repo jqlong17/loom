@@ -1,0 +1,39 @@
+{
+  "name": "loom-mcp",
+  "version": "0.1.0",
+  "description": "Weaving ephemeral AI chats into a persistent system mind — an MCP server that turns conversations into structured Markdown knowledge.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "loom": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "loom",
+    "ai-memory",
+    "markdown",
+    "knowledge-base",
+    "model-context-protocol"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "simple-git": "^3.27.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
