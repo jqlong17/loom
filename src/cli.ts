@@ -100,6 +100,7 @@ Usage:
 Commands:
   init
   weave --category <concepts|decisions|threads> --title <t> --content <text> [--tags a,b] [--mode replace|append|section]
+  closeout --title <t> --content <text> [--category threads|concepts] [--tags a,b] [--mode append|replace|section]
   trace --query <text> [--category <c>] [--tags a,b] [--limit n]
   read --category <c> --slug <filename-without-md>
   list
@@ -176,6 +177,70 @@ async function main(): Promise<void> {
           ok: true,
           ...result,
           git: commitResult.message,
+        },
+        jsonMode,
+      );
+      return;
+    }
+
+    case "closeout": {
+      const title = asString(args, "title");
+      const content = asString(args, "content");
+      if (!title || !content) {
+        fail("closeout requires --title --content");
+      }
+
+      const category = (asString(args, "category") ??
+        "threads") as "concepts" | "decisions" | "threads";
+      const mode = (asString(args, "mode") ??
+        "append") as "replace" | "append" | "section";
+
+      const weaveResult = await weave(loomRoot, {
+        category,
+        title,
+        content,
+        tags: asList(args, "tags"),
+        mode,
+      });
+      await rebuildIndex(loomRoot);
+      const weaveCommit = await git.commitChanges(
+        [weaveResult.filePath, path.join(loomRoot, "index.md")],
+        `${weaveResult.isUpdate ? "update" : "add"} ${category}/${title}`,
+      );
+
+      const highlights = await collectDailyHighlightsFromGit(WORK_DIR);
+      let changelogResult:
+        | Awaited<ReturnType<typeof updateChangelog>>
+        | undefined;
+      let changelogCommitMsg: string | undefined;
+      if (highlights.length > 0) {
+        changelogResult = await updateChangelog(WORK_DIR, highlights);
+        const cc = await git.commitChanges(
+          [changelogResult.filePath],
+          `update changelog ${changelogResult.date}`,
+        );
+        changelogCommitMsg = cc.message;
+      }
+
+      print(
+        {
+          ok: true,
+          weave: {
+            ...weaveResult,
+            git: weaveCommit.message,
+          },
+          changelog: changelogResult
+            ? {
+                file: changelogResult.filePath,
+                date: changelogResult.date,
+                added: changelogResult.added,
+                total: changelogResult.totalForDate,
+                git: changelogCommitMsg,
+              }
+            : {
+                skipped: true,
+                reason: "no highlights",
+              },
         },
         jsonMode,
       );

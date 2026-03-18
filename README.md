@@ -252,6 +252,9 @@ npm run build
 - `loom_upgrade` 可在安装目录执行 Git 升级（`git pull`）：
   - `dryRun=true`：只检查是否可升级
   - 默认：执行实际升级
+- `loom-cli closeout` 可一键执行“功能收口”：
+  - 写入一条 `loom_weave` 总结
+  - 自动更新 `CHANGELOG.md`（按当天聚合）
 
 ## 工具列表
 
@@ -329,6 +332,42 @@ Loom 的知识库本质上就是 Git 仓库里的一组 Markdown 文件，多人
   - MCP 工具：调用 `loom_changelog`（`mode=auto`）
   - 命令行：`npm run changelog:auto`
 
+## 强制收口（推荐）
+
+每次完成一个功能（或每次 commit 后），建议固定执行：
+
+1. `loom_weave`（记录 thread/concept 的功能总结）
+2. `loom_changelog(mode=auto)`（更新公开变更）
+
+可选一键方式（CLI Wrapper）：
+
+```bash
+node dist/cli.js closeout \
+  --title "本次功能名称" \
+  --content "本次做了什么、为什么做、边界和影响" \
+  --category threads \
+  --mode append \
+  --tags release,feature
+```
+
+### Git Hook 自动化（post-commit）
+
+安装 hook（一次即可）：
+
+```bash
+npm run hooks:install
+```
+
+安装后每次 commit 会自动执行：
+
+```bash
+node dist/cli.js changelog --mode auto --commit false --json
+```
+
+说明：
+- 该 hook 只更新工作区中的 `CHANGELOG.md`，不会自动提交（避免递归 commit）
+- 你可以在下一次提交中一起提交 changelog 变化
+
 ## 开发命令
 
 ```bash
@@ -338,6 +377,7 @@ npm run watch    # 监听编译
 npm run lint     # 类型检查
 npm run changelog:auto  # 自动更新当天 CHANGELOG 核心变更
 npm run cli -- help  # 查看 CLI Wrapper 命令
+npm run hooks:install  # 安装 post-commit 自动更新 hook
 ```
 
 ## 许可证

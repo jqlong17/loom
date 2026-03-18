@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+CLI="$ROOT/dist/cli.js"
+
+# This hook only updates CHANGELOG in working tree.
+# It does NOT create a commit to avoid recursive post-commit loops.
+if [[ -f "$CLI" ]]; then
+  LOOM_WORK_DIR="$ROOT" node "$CLI" changelog --mode auto --commit false --json >/dev/null 2>&1 || true
+fi
+

@@ -15,7 +15,8 @@
     "start": "node dist/index.js",
     "lint": "tsc --noEmit",
     "changelog:auto": "tsx scripts/changelog-auto.ts",
-    "cli": "node dist/cli.js"
+    "cli": "node dist/cli.js",
+    "hooks:install": "bash scripts/hooks-install.sh"
   },
   "keywords": [
     "mcp",

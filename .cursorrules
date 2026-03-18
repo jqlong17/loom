@@ -54,6 +54,13 @@ Proactively call `loom_weave` when any of the following happen during our conver
 - Use `mode=auto` to infer daily highlights from git commits
 - If auto misses key points, use `mode=manual` with explicit highlights
 
+## Mandatory Closeout Rule (REQUIRED)
+
+- After finishing a feature and passing build/lint, you MUST run closeout:
+  1) call `loom_weave` (or `loom-cli closeout`) to record a thread/concept summary
+  2) call `loom_changelog(mode=auto)` to update public daily highlights
+- Do not end implementation turn without these two steps unless user explicitly says skip
+
 ## General Rules
 
 - Always include meaningful tags for better retrieval
