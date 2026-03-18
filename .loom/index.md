@@ -1,6 +1,6 @@
 ---
-updated: 2026-03-18T14:53:32.764Z
-total_entries: 6
+updated: 2026-03-18T14:53:43.809Z
+total_entries: 7
 ---
 
 # Loom System Index
@@ -11,6 +11,7 @@ total_entries: 6
 
 - [Knowledge Categories Design](concepts/knowledge-categories-design.md) — tags: architecture, categories, knowledge-model — updated: 2026-03-18T14:53:32.763Z
 - [Loom Vision and Core Design](concepts/loom-vision-and-core-design.md) — tags: vision, architecture, foundation, core — updated: 2026-03-18T14:52:46.658Z
+- [Team Collaboration via Git](concepts/team-collaboration-via-git.md) — tags: collaboration, git, sync, team — updated: 2026-03-18T14:53:43.808Z
 - [Three-Layer Architecture](concepts/three-layer-architecture.md) — tags: architecture, design, modules, core — updated: 2026-03-18T14:53:24.152Z
 
 ## Decisions
