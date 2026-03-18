@@ -1,6 +1,6 @@
 ---
-updated: 2026-03-18T14:53:57.035Z
-total_entries: 8
+updated: 2026-03-18T15:20:06.087Z
+total_entries: 9
 ---
 
 # Loom System Index
@@ -23,3 +23,4 @@ total_entries: 8
 ## Threads
 
 - [Founding Conversation Summary](threads/founding-conversation-summary.md) — tags: founding, history, milestone, conversation — updated: 2026-03-18T14:53:57.033Z
+- [Why Loom Memory Did Not Update Automatically](threads/why-loom-memory-did-not-update-automatically.md) — tags: memory, behavior, operations, faq — updated: 2026-03-18T15:20:06.083Z
