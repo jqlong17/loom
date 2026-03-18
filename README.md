@@ -261,6 +261,12 @@ npm run build
   - `section`：按 `##` 小节替换或新增
 - `loom_trace` 支持 `category`、`tags`、`limit` 参数，便于精准检索
 - `loom_deprecate` 可将旧条目标记为废弃，并可选指向 `superseded_by`
+- `loom_probe` 支持“主动提问 -> 回答回写”闭环：
+  - 第一步：根据当前对话和已有记忆，生成 1~5 条澄清问题
+  - 第二步：收到用户回答后，以 `record=true` 将 Q&A 写入 `threads`
+  - 示例：
+    - 生成问题：`loom_probe(context="当前需求描述", goal="本轮目标")`
+    - 回写回答：`loom_probe(context="当前需求描述", record=true, answers=[{question,answer}])`
 - `loom_changelog` 可按日期维护公开 `CHANGELOG.md`：
   - `mode=auto`：自动从当天 git 提交提炼核心变化
   - `mode=manual`：手动传入要公开的核心变化点
@@ -301,6 +307,7 @@ npm run build
 | `loom_log` | 查看知识变更的 Git 历史 |
 | `loom_deprecate` | 将旧条目标记为 deprecated，并记录废弃原因和替代项 |
 | `loom_reflect` | 执行知识库自检，输出冲突、过期、缺少标签、可合并项 |
+| `loom_probe` | 基于当前对话主动生成澄清问题，并可将用户回答回写到记忆 |
 | `loom_changelog` | 维护公开 CHANGELOG（按日期聚合核心变更） |
 | `loom_upgrade` | 升级 Loom MCP 安装本体（从 GitHub 拉取最新） |
 | `loom-cli` | OpenClaw/任意 Agent 可调用的命令行适配层（非 MCP） |

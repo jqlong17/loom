@@ -258,6 +258,12 @@ Once configured, Loom tools are available in your AI chat:
   - `section`: replace or append a matching `##` section
 - `loom_trace` supports `category`, `tags`, and `limit` for focused retrieval
 - `loom_deprecate` marks outdated entries as deprecated and can point to `superseded_by`
+- `loom_probe` enables an active questioning loop:
+  - Step 1: generate 1-5 clarification questions from current dialog + existing memory
+  - Step 2: call with `record=true` after user answers to persist Q&A into `threads`
+  - Example:
+    - Generate questions: `loom_probe(context="current request", goal="session objective")`
+    - Persist answers: `loom_probe(context="current request", record=true, answers=[{question,answer}])`
 - `loom_changelog` maintains public `CHANGELOG.md` grouped by date:
   - `mode=auto`: infer daily core changes from git commits
   - `mode=manual`: provide highlight points explicitly
@@ -295,6 +301,7 @@ Notes:
 | `loom_log` | Show Git history of knowledge changes |
 | `loom_deprecate` | Mark an entry deprecated with reason and optional replacement pointer |
 | `loom_reflect` | Run a self-audit for conflicts, stale entries, missing tags, and merge candidates |
+| `loom_probe` | Generate proactive clarification questions and optionally persist user answers |
 | `loom_changelog` | Maintain public CHANGELOG grouped by day-level core changes |
 | `loom_upgrade` | Upgrade Loom MCP installation itself from GitHub |
 | `loom-cli` | Command-line compatibility layer for OpenClaw/any non-MCP agent |

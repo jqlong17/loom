@@ -46,6 +46,14 @@ Proactively call `loom_weave` when any of the following happen during our conver
 - When the user asks for a knowledge base health check
 - Periodically after many weave operations to check for conflicts
 
+## When to ASK (loom_probe)
+
+- When user intent has ambiguity (goal/scope/constraints/acceptance not explicit)
+- When new request may conflict with existing concepts/decisions
+- First call `loom_probe` to generate proactive questions
+- Ask the user those questions in chat
+- After user replies, call `loom_probe` with `record=true` and `answers` to persist Q&A into Loom
+
 ## When to DEPRECATE (loom_deprecate)
 
 - When new knowledge explicitly supersedes an older entry

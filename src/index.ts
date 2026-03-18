@@ -48,6 +48,91 @@ function truncateText(text: string, maxChars: number): string {
   return `${cleaned.slice(0, maxChars)}...`;
 }
 
+interface ProbeAnswer {
+  question: string;
+  answer: string;
+}
+
+function deriveContextTerms(input: string, maxTerms = 5): string[] {
+  const lowered = input.toLowerCase();
+  const asciiTerms = lowered.match(/[a-z][a-z0-9_-]{2,}/g) ?? [];
+  const cjkTerms = input.match(/[\u4e00-\u9fff]{2,}/g) ?? [];
+  const stop = new Set([
+    "the",
+    "and",
+    "for",
+    "with",
+    "that",
+    "this",
+    "from",
+    "into",
+    "about",
+    "have",
+    "will",
+    "should",
+    "can",
+    "could",
+    "我们",
+    "需要",
+    "一个",
+    "可以",
+    "进行",
+    "这个",
+    "怎么",
+    "什么",
+  ]);
+
+  const all = [...asciiTerms, ...cjkTerms].filter((t) => !stop.has(t));
+  const score = new Map<string, number>();
+  for (const term of all) {
+    score.set(term, (score.get(term) ?? 0) + 1);
+  }
+  return Array.from(score.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([term]) => term)
+    .slice(0, maxTerms);
+}
+
+function buildProbeContent(params: {
+  context: string;
+  goal?: string;
+  answers: ProbeAnswer[];
+  evidencePaths: string[];
+  suggestedQuestions: string[];
+}): string {
+  const qas = params.answers
+    .map(
+      (item, idx) =>
+        `### Q${idx + 1}: ${item.question}\n\nA: ${item.answer}`,
+    )
+    .join("\n\n");
+
+  const followups = params.suggestedQuestions
+    .map((q) => `- ${q}`)
+    .join("\n");
+
+  const refs = params.evidencePaths.length
+    ? params.evidencePaths.map((p) => `- ${p}`).join("\n")
+    : "- none";
+
+  return [
+    "## 背景上下文",
+    params.context,
+    "",
+    "## 对齐目标",
+    params.goal ?? "未显式提供",
+    "",
+    "## 主动提问与用户回答",
+    qas,
+    "",
+    "## 依据的既有记忆",
+    refs,
+    "",
+    "## 下一步待确认",
+    followups || "- 暂无",
+  ].join("\n");
+}
+
 const server = new McpServer({
   name: "loom",
   version: "0.1.0",
@@ -282,6 +367,193 @@ server.tool(
           text: briefing,
         },
       ],
+    };
+  },
+);
+
+// ─── Tool: loom_probe ─────────────────────────────────────────
+server.tool(
+  "loom_probe",
+  "Proactively generate clarification questions based on current dialog and Loom memory; optionally record user answers back into Loom.",
+  {
+    context: z
+      .string()
+      .describe("Current dialog summary or the latest user request to analyze"),
+    goal: z
+      .string()
+      .optional()
+      .describe("Optional objective that the questioning should optimize for"),
+    max_questions: z
+      .number()
+      .optional()
+      .describe("How many proactive questions to generate (default: 3, max: 5)"),
+    record: z
+      .boolean()
+      .optional()
+      .describe("If true, save user answers into Loom as a thread entry"),
+    answers: z
+      .array(
+        z.object({
+          question: z.string(),
+          answer: z.string(),
+        }),
+      )
+      .optional()
+      .describe("User answers to previously generated questions, used when record=true"),
+    title: z
+      .string()
+      .optional()
+      .describe("Optional Loom thread title for answer capture"),
+    tags: z
+      .array(z.string())
+      .optional()
+      .describe("Optional extra tags for captured Q&A memory"),
+    commit: z
+      .boolean()
+      .optional()
+      .describe("Whether to auto-commit captured Q&A entry (default: true)"),
+  },
+  async ({ context, goal, max_questions, record, answers, title, tags, commit }) => {
+    const { config, loomRoot } = await getRuntimeContext();
+    await ensureLoomStructure(loomRoot);
+    const maxQ = Math.min(5, Math.max(1, max_questions ?? 3));
+
+    const terms = deriveContextTerms(`${goal ?? ""} ${context}`);
+    const coreConcepts = await listCoreConcepts(loomRoot);
+    const recent = await listRecentEntries(loomRoot, 5);
+    const evidenceMap = new Map<string, string>();
+
+    for (const term of terms.slice(0, 4)) {
+      const hits = await trace(loomRoot, term, { limit: 2 });
+      for (const hit of hits) {
+        if (!evidenceMap.has(hit.filePath)) {
+          evidenceMap.set(
+            hit.filePath,
+            `${hit.title} [${hit.category}] — ${truncateText(hit.snippet, 120)}`,
+          );
+        }
+      }
+    }
+
+    const evidencePaths = Array.from(evidenceMap.keys());
+    const questions: Array<{ question: string; reason: string }> = [];
+
+    if (!goal || goal.trim().length < 6) {
+      questions.push({
+        question: "这轮对话的最终目标是什么？希望产出的结果形式是文档、代码还是决策结论？",
+        reason: "目标未充分显式化，后续记忆沉淀容易偏离重点。",
+      });
+    }
+
+    questions.push({
+      question: "本次范围的边界是什么？哪些内容明确不做，以避免扩散？",
+      reason: "范围边界决定后续知识分类与行动优先级。",
+    });
+
+    questions.push({
+      question: "成功验收标准是什么？请给出 2-3 条可验证条件。",
+      reason: "缺少验收标准会导致记忆记录无法支持后续复盘。",
+    });
+
+    if (evidencePaths.length > 0) {
+      questions.push({
+        question:
+          "与现有记忆相比，这次需求的增量变化是什么？请明确“沿用”与“变更”的部分。",
+        reason: "已有相关历史，需避免与既有概念/决策冲突。",
+      });
+    } else {
+      questions.push({
+        question: "当前需求涉及哪些核心模块或关键词？请给 3-5 个检索词。",
+        reason: "尚未检索到高相关记忆，先补检索锚点可提升沉淀质量。",
+      });
+    }
+
+    const hasRiskHint = /风险|risk|限制|constraint|兼容|兼容性|迁移|migration/i.test(
+      `${context} ${goal ?? ""}`,
+    );
+    if (!hasRiskHint) {
+      questions.push({
+        question: "这次方案有哪些风险、约束或兼容性要求需要提前记录？",
+        reason: "风险与约束缺失会影响后续决策质量。",
+      });
+    }
+
+    const selected = questions.slice(0, maxQ);
+
+    if (record) {
+      const cleanedAnswers = (answers ?? []).filter(
+        (a) => a.question.trim() && a.answer.trim(),
+      );
+      if (cleanedAnswers.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "record=true 时必须提供 answers，且每条需包含 question 与 answer。",
+            },
+          ],
+        };
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const entryTitle = title?.trim() || `active-inquiry-${today}`;
+      const contentMd = buildProbeContent({
+        context,
+        goal,
+        answers: cleanedAnswers,
+        evidencePaths,
+        suggestedQuestions: selected.map((q) => q.question),
+      });
+      const normalizedTags = Array.from(
+        new Set(["active-inquiry", "qa-capture", "memory", ...(tags ?? [])]),
+      );
+
+      const result = await weave(loomRoot, {
+        category: "threads",
+        title: entryTitle,
+        content: contentMd,
+        tags: normalizedTags,
+        mode: "append",
+      });
+      await rebuildIndex(loomRoot);
+
+      const lines = [
+        `Captured Q&A to: threads/${entryTitle}`,
+        `File: ${result.filePath}`,
+        `Answers: ${cleanedAnswers.length}`,
+        `Tags: ${normalizedTags.join(", ")}`,
+      ];
+
+      if (commit ?? true) {
+        const git = new GitManager(WORK_DIR, config);
+        const commitResult = await git.commitChanges(
+          [result.filePath, `${loomRoot}/index.md`],
+          `capture inquiry ${entryTitle}`,
+        );
+        lines.push(`Git: ${commitResult.message}`);
+      }
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+
+    const promptText = [
+      "## Proactive Questions",
+      ...selected.map(
+        (item, idx) => `${idx + 1}. ${item.question}\n   - Why: ${item.reason}`,
+      ),
+      "",
+      "## Memory Evidence",
+      `- Core concepts count: ${coreConcepts.length}`,
+      `- Recent memory count: ${recent.length}`,
+      ...Array.from(evidenceMap.entries()).map(
+        ([file, summary]) => `- ${file}: ${summary}`,
+      ),
+      "",
+      "After the user answers, call loom_probe again with record=true and answers=[{question,answer}] to persist the Q&A.",
+    ].join("\n");
+
+    return {
+      content: [{ type: "text", text: promptText }],
     };
   },
 );
@@ -716,6 +988,13 @@ Use mode:
   2) loom_trace for candidate entries
   3) loom_read only for top relevant entries
   4) read full files only when summary is insufficient
+
+## When to ASK (loom_probe)
+
+- When requirements are ambiguous or underspecified
+- When scope/acceptance criteria are missing
+- When current request may conflict with existing concepts/decisions
+- First call loom_probe to generate questions, ask user in chat, then call loom_probe(record=true) to persist Q&A
 
 ## When to REFLECT (loom_reflect)
 
