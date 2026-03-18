@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import * as path from "path";
+import { fileURLToPath } from "url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -18,8 +20,25 @@ import {
   deprecateEntry,
 } from "./weaver.js";
 import { GitManager } from "./git-manager.js";
+import { upgradeFromGit } from "./updater.js";
+import {
+  updateChangelog,
+  collectDailyHighlightsFromGit,
+} from "./changelog.js";
 
 const WORK_DIR = process.env.LOOM_WORK_DIR ?? process.cwd();
+const SERVER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+let cachedConfig: Awaited<ReturnType<typeof loadConfig>> | undefined;
+let cachedLoomRoot: string | undefined;
+
+async function getRuntimeContext() {
+  if (!cachedConfig || !cachedLoomRoot) {
+    cachedConfig = await loadConfig(WORK_DIR);
+    cachedLoomRoot = resolveLoomPath(WORK_DIR, cachedConfig);
+  }
+  return { config: cachedConfig, loomRoot: cachedLoomRoot };
+}
 
 const server = new McpServer({
   name: "loom",
@@ -32,8 +51,7 @@ server.tool(
   "Initialize Loom knowledge base in the current project. Creates .loom/ directory structure with index, concepts, decisions, and threads folders.",
   {},
   async () => {
-    const config = await loadConfig(WORK_DIR);
-    const loomRoot = resolveLoomPath(WORK_DIR, config);
+    const { config, loomRoot } = await getRuntimeContext();
     await ensureLoomStructure(loomRoot);
 
     const git = new GitManager(WORK_DIR, config);
@@ -93,8 +111,7 @@ server.tool(
       ),
   },
   async ({ category, title, content, tags, mode }) => {
-    const config = await loadConfig(WORK_DIR);
-    const loomRoot = resolveLoomPath(WORK_DIR, config);
+    const { config, loomRoot } = await getRuntimeContext();
     await ensureLoomStructure(loomRoot);
 
     const result = await weave(loomRoot, {
@@ -146,12 +163,23 @@ server.tool(
     query: z
       .string()
       .describe("Keyword or phrase to search across all knowledge entries"),
+    category: z
+      .enum(["concepts", "decisions", "threads"])
+      .optional()
+      .describe("Optional category filter"),
+    tags: z
+      .array(z.string())
+      .optional()
+      .describe("Optional tag filter; all provided tags must be present"),
+    limit: z
+      .number()
+      .optional()
+      .describe("Maximum results to return after relevance sorting"),
   },
-  async ({ query }) => {
-    const config = await loadConfig(WORK_DIR);
-    const loomRoot = resolveLoomPath(WORK_DIR, config);
+  async ({ query, category, tags, limit }) => {
+    const { loomRoot } = await getRuntimeContext();
 
-    const results = await trace(loomRoot, query);
+    const results = await trace(loomRoot, query, { category, tags, limit });
 
     if (results.length === 0) {
       return {
@@ -167,7 +195,7 @@ server.tool(
     const formatted = results
       .map(
         (r) =>
-          `### ${r.title} [${r.category}]\nFile: ${r.filePath}\nTags: ${r.tags} | Updated: ${r.updated}\n\n${r.snippet}`,
+          `### ${r.title} [${r.category}]\nFile: ${r.filePath}\nTags: ${r.tags} | Updated: ${r.updated} | Score: ${r.score ?? 0}\n\n${r.snippet}`,
       )
       .join("\n\n---\n\n");
 
@@ -195,8 +223,7 @@ server.tool(
       ),
   },
   async ({ category, slug }) => {
-    const config = await loadConfig(WORK_DIR);
-    const loomRoot = resolveLoomPath(WORK_DIR, config);
+    const { config, loomRoot } = await getRuntimeContext();
 
     const content = await readKnowledge(loomRoot, category, slug);
     if (!content) {
@@ -220,8 +247,7 @@ server.tool(
   "List all knowledge entries in the Loom knowledge base. Use this to get an overview of what the system knows.",
   {},
   async () => {
-    const config = await loadConfig(WORK_DIR);
-    const loomRoot = resolveLoomPath(WORK_DIR, config);
+    const { config, loomRoot } = await getRuntimeContext();
 
     const all = await listAll(loomRoot);
 
@@ -267,7 +293,7 @@ server.tool(
   "Synchronize the Loom knowledge base with the remote Git repository. Pulls latest changes from teammates and pushes local changes.",
   {},
   async () => {
-    const config = await loadConfig(WORK_DIR);
+    const { config } = await getRuntimeContext();
     const git = new GitManager(WORK_DIR, config);
 
     if (!(await git.isRepo())) {
@@ -297,11 +323,102 @@ server.tool(
       .describe("Maximum number of log entries to show (default: 10)"),
   },
   async ({ limit }) => {
-    const config = await loadConfig(WORK_DIR);
+    const { config } = await getRuntimeContext();
     const git = new GitManager(WORK_DIR, config);
 
     const log = await git.log(limit ?? 10);
     return { content: [{ type: "text", text: `Loom Git History:\n\n${log}` }] };
+  },
+);
+
+// ─── Tool: loom_changelog ──────────────────────────────────────
+server.tool(
+  "loom_changelog",
+  "Update public CHANGELOG.md grouped by date. Supports auto mode (derive daily highlights from git commits) and manual mode (provide highlights explicitly).",
+  {
+    mode: z
+      .enum(["auto", "manual"])
+      .optional()
+      .describe("auto: infer highlights from daily git commits; manual: use provided highlights"),
+    date: z
+      .string()
+      .optional()
+      .describe("Date in YYYY-MM-DD format. Defaults to today."),
+    highlights: z
+      .array(z.string())
+      .optional()
+      .describe("Manual highlights used when mode=manual"),
+    commit: z
+      .boolean()
+      .optional()
+      .describe("Whether to auto-commit changelog update (default: true)"),
+  },
+  async ({ mode, date, highlights, commit }) => {
+    const { config } = await getRuntimeContext();
+    const selectedMode = mode ?? "auto";
+
+    const items =
+      selectedMode === "manual"
+        ? (highlights ?? [])
+        : await collectDailyHighlightsFromGit(WORK_DIR, date);
+
+    if (items.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              selectedMode === "manual"
+                ? "No highlights provided. Nothing written to CHANGELOG.md."
+                : "No core highlights inferred from git for that date.",
+          },
+        ],
+      };
+    }
+
+    const result = await updateChangelog(WORK_DIR, items, date);
+    const lines = [
+      `Updated: ${result.filePath}`,
+      `Date: ${result.date}`,
+      `Added points: ${result.added}`,
+      `Total points for date: ${result.totalForDate}`,
+    ];
+
+    if (commit ?? true) {
+      const git = new GitManager(WORK_DIR, config);
+      const commitResult = await git.commitChanges(
+        [result.filePath],
+        `update changelog ${result.date}`,
+      );
+      lines.push(`Git: ${commitResult.message}`);
+    }
+
+    return {
+      content: [{ type: "text", text: lines.join("\n") }],
+    };
+  },
+);
+
+// ─── Tool: loom_upgrade ────────────────────────────────────────
+server.tool(
+  "loom_upgrade",
+  "Upgrade Loom MCP server to the latest version from its GitHub repository. This updates the Loom install itself, not the current project's .loom knowledge files.",
+  {
+    dryRun: z
+      .boolean()
+      .optional()
+      .describe("If true, only check upgrade readiness without pulling changes"),
+  },
+  async ({ dryRun }) => {
+    const result = await upgradeFromGit(SERVER_ROOT, dryRun ?? false);
+    return {
+      content: [
+        {
+          type: "text",
+          text: [result.message, ...result.details].join("\n"),
+        },
+      ],
+    };
   },
 );
 
@@ -329,8 +446,7 @@ server.tool(
       ),
   },
   async ({ category, slug, reason, superseded_by }) => {
-    const config = await loadConfig(WORK_DIR);
-    const loomRoot = resolveLoomPath(WORK_DIR, config);
+    const { config, loomRoot } = await getRuntimeContext();
 
     const result = await deprecateEntry(
       loomRoot,
@@ -391,8 +507,7 @@ server.tool(
       .describe("Maximum number of findings to return (default: 20)"),
   },
   async ({ staleDays, includeThreads, maxFindings }) => {
-    const config = await loadConfig(WORK_DIR);
-    const loomRoot = resolveLoomPath(WORK_DIR, config);
+    const { config, loomRoot } = await getRuntimeContext();
     await ensureLoomStructure(loomRoot);
 
     const report = await reflect(loomRoot, {
@@ -452,8 +567,7 @@ server.tool(
 
 // ─── Resource: loom://index ───────────────────────────────────
 server.resource("loom-index", "loom://index", async (uri) => {
-  const config = await loadConfig(WORK_DIR);
-  const loomRoot = resolveLoomPath(WORK_DIR, config);
+  const { loomRoot } = await getRuntimeContext();
 
   try {
     const indexContent = await rebuildIndex(loomRoot);

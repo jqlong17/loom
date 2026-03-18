@@ -12,7 +12,8 @@
     "watch": "tsc --watch",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "changelog:auto": "tsx scripts/changelog-auto.ts"
   },
   "keywords": [
     "mcp",

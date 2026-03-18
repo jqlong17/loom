@@ -158,8 +158,25 @@ Once configured, Loom tools are available in your AI chat:
 ```
 "Initialize the Loom knowledge base for this project."
 "Loom this — record our discussion about the payment flow."
+"Append today's findings to the existing payment-flow entry."
+"Deprecate the old auth flow and link to the new one."
 "What does Loom know about our auth system?"
 ```
+
+### 4. Advanced Usage
+
+- `loom_weave` supports `mode`:
+  - `replace`: full overwrite (default)
+  - `append`: add new content below existing knowledge
+  - `section`: replace or append a matching `##` section
+- `loom_trace` supports `category`, `tags`, and `limit` for focused retrieval
+- `loom_deprecate` marks outdated entries as deprecated and can point to `superseded_by`
+- `loom_changelog` maintains public `CHANGELOG.md` grouped by date:
+  - `mode=auto`: infer daily core changes from git commits
+  - `mode=manual`: provide highlight points explicitly
+- `loom_upgrade` upgrades the Loom MCP installation itself from Git:
+  - `dryRun=true`: check upgrade readiness only
+  - default: execute real `git pull` upgrade
 
 ## Tools
 
@@ -172,7 +189,10 @@ Once configured, Loom tools are available in your AI chat:
 | `loom_list` | List all entries in the knowledge base |
 | `loom_sync` | Pull + push with the remote Git repository |
 | `loom_log` | Show Git history of knowledge changes |
+| `loom_deprecate` | Mark an entry deprecated with reason and optional replacement pointer |
 | `loom_reflect` | Run a self-audit for conflicts, stale entries, missing tags, and merge candidates |
+| `loom_changelog` | Maintain public CHANGELOG grouped by day-level core changes |
+| `loom_upgrade` | Upgrade Loom MCP installation itself from GitHub |
 
 ## Knowledge Categories
 
@@ -225,6 +245,14 @@ Loom's knowledge base is just a folder of Markdown files in your Git repo. Team 
 3. **PR review**: Knowledge updates show up in pull requests for review
 4. **Conflict resolution**: Standard Git merge for Markdown files
 
+## Public Changelog
+
+- `CHANGELOG.md` (Chinese) is used for public daily core feature updates
+- Multiple updates on the same day are merged under one date section
+- Auto update options:
+  - MCP tool: call `loom_changelog` with `mode=auto`
+  - CLI: `npm run changelog:auto`
+
 ## Development
 
 ```bash
@@ -232,6 +260,7 @@ npm run dev      # Run with tsx (hot reload)
 npm run build    # Compile TypeScript
 npm run watch    # Watch mode compilation
 npm run lint     # Type check
+npm run changelog:auto  # Auto-update today's core changelog section
 ```
 
 ## License

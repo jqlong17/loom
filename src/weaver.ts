@@ -127,6 +127,13 @@ export interface TraceResult {
   snippet: string;
   tags: string;
   updated: string;
+  score?: number;
+}
+
+export interface TraceOptions {
+  category?: LoomCategory;
+  tags?: string[];
+  limit?: number;
 }
 
 interface KnowledgeRecord {
@@ -141,13 +148,19 @@ interface KnowledgeRecord {
 export async function trace(
   loomRoot: string,
   query: string,
+  options: TraceOptions = {},
 ): Promise<TraceResult[]> {
   const results: TraceResult[] = [];
-  const q = query.toLowerCase();
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
 
   const categories: LoomCategory[] = ["concepts", "decisions", "threads"];
 
   for (const cat of categories) {
+    if (options.category && options.category !== cat) continue;
     const dir = path.join(loomRoot, cat);
     let files: string[];
     try {
@@ -161,20 +174,42 @@ export async function trace(
       const filePath = path.join(dir, file);
       const raw = await fs.readFile(filePath, "utf-8");
 
-      if (!raw.toLowerCase().includes(q)) continue;
-
       const fm = parseFrontmatter(raw);
       const titleMatch = raw.match(/^# (.+)$/m);
+      const title = titleMatch?.[1] ?? file.replace(".md", "");
+      const tags = parseTags(fm?.tags ?? "");
+
+      if (options.tags && options.tags.length > 0) {
+        const required = options.tags.map((t) => t.toLowerCase());
+        const hasAll = required.every((need) =>
+          tags.some((existing) => existing.toLowerCase() === need),
+        );
+        if (!hasAll) continue;
+      }
+
+      const score = computeTraceScore(raw, title, tags, query, terms);
+      if (score <= 0) continue;
 
       results.push({
-        title: titleMatch?.[1] ?? file.replace(".md", ""),
+        title,
         category: cat,
         filePath: path.relative(loomRoot, filePath),
-        snippet: extractSnippet(raw, q),
-        tags: fm?.tags ?? "",
+        snippet: extractSnippet(raw, query),
+        tags: fm?.tags ?? "none",
         updated: fm?.updated ?? "unknown",
+        score,
       });
     }
+  }
+
+  results.sort((a, b) => {
+    const scoreDiff = (b.score ?? 0) - (a.score ?? 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    return Date.parse(b.updated || "") - Date.parse(a.updated || "");
+  });
+
+  if (options.limit && options.limit > 0) {
+    return results.slice(0, options.limit);
   }
 
   return results;
@@ -191,6 +226,35 @@ function extractSnippet(content: string, query: string): string {
   const end = Math.min(body.length, idx + query.length + 120);
   const snippet = body.slice(start, end).trim();
   return (start > 0 ? "..." : "") + snippet + (end < body.length ? "..." : "");
+}
+
+function computeTraceScore(
+  raw: string,
+  title: string,
+  tags: string[],
+  query: string,
+  terms: string[],
+): number {
+  const text = raw.toLowerCase();
+  const normalizedTitle = title.toLowerCase();
+  const normalizedTags = tags.map((t) => t.toLowerCase());
+  const q = query.toLowerCase().trim();
+
+  let score = 0;
+  if (q.length > 0 && normalizedTitle.includes(q)) {
+    score += 12;
+  }
+  if (q.length > 0 && normalizedTags.some((t) => t.includes(q))) {
+    score += 6;
+  }
+
+  for (const term of terms) {
+    if (normalizedTitle.includes(term)) score += 4;
+    if (normalizedTags.some((t) => t.includes(term))) score += 3;
+    if (text.includes(term)) score += 1;
+  }
+
+  return score;
 }
 
 export async function listAll(loomRoot: string): Promise<TraceResult[]> {

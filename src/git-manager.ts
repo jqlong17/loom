@@ -11,10 +11,12 @@ export interface GitResult {
 export class GitManager {
   private git: SimpleGit;
   private config: LoomConfig;
+  private workDir: string;
 
   constructor(workDir: string, config: LoomConfig) {
     this.git = simpleGit(workDir);
     this.config = config;
+    this.workDir = workDir;
   }
 
   async isRepo(): Promise<boolean> {
@@ -43,7 +45,7 @@ export class GitManager {
       await this.initIfNeeded();
 
       const relativePaths = filePaths.map((fp) =>
-        path.isAbsolute(fp) ? path.relative(process.cwd(), fp) : fp,
+        path.isAbsolute(fp) ? path.relative(this.workDir, fp) : fp,
       );
 
       await this.git.add(relativePaths);

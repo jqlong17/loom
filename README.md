@@ -160,8 +160,25 @@ LOOM_WORK_DIR = "/your/project/root"
 ```
 "初始化当前项目的 Loom 知识库。"
 "把我们刚才讨论的支付流程记录到 Loom。"
+"把这个主题以 append 模式补充进已有条目。"
+"把旧版登录流程标记为 deprecated，并指向新方案。"
 "Loom 里有哪些关于认证系统的知识？"
 ```
+
+### 4. 高级用法
+
+- `loom_weave` 支持 `mode`：
+  - `replace`：整体覆盖（默认）
+  - `append`：在原内容下追加，不丢失历史
+  - `section`：按 `##` 小节替换或新增
+- `loom_trace` 支持 `category`、`tags`、`limit` 参数，便于精准检索
+- `loom_deprecate` 可将旧条目标记为废弃，并可选指向 `superseded_by`
+- `loom_changelog` 可按日期维护公开 `CHANGELOG.md`：
+  - `mode=auto`：自动从当天 git 提交提炼核心变化
+  - `mode=manual`：手动传入要公开的核心变化点
+- `loom_upgrade` 可在安装目录执行 Git 升级（`git pull`）：
+  - `dryRun=true`：只检查是否可升级
+  - 默认：执行实际升级
 
 ## 工具列表
 
@@ -174,7 +191,10 @@ LOOM_WORK_DIR = "/your/project/root"
 | `loom_list` | 列出知识库中的所有条目 |
 | `loom_sync` | 与远程 Git 仓库执行 pull + push 同步 |
 | `loom_log` | 查看知识变更的 Git 历史 |
+| `loom_deprecate` | 将旧条目标记为 deprecated，并记录废弃原因和替代项 |
 | `loom_reflect` | 执行知识库自检，输出冲突、过期、缺少标签、可合并项 |
+| `loom_changelog` | 维护公开 CHANGELOG（按日期聚合核心变更） |
+| `loom_upgrade` | 升级 Loom MCP 安装本体（从 GitHub 拉取最新） |
 
 ## 知识分类
 
@@ -227,6 +247,14 @@ Loom 的知识库本质上就是 Git 仓库里的一组 Markdown 文件，多人
 3. 会话后提交/推送新增知识
 4. 通过 PR 审阅知识变更，确保质量和一致性
 
+## 公开变更记录（CHANGELOG）
+
+- 项目根目录提供 `CHANGELOG.md`（中文）用于公开每日核心功能变化
+- 同一天多次新增会聚合在同一个日期下
+- 可使用以下方式自动更新：
+  - MCP 工具：调用 `loom_changelog`（`mode=auto`）
+  - 命令行：`npm run changelog:auto`
+
 ## 开发命令
 
 ```bash
@@ -234,6 +262,7 @@ npm run dev      # 使用 tsx 运行（开发模式）
 npm run build    # 编译 TypeScript
 npm run watch    # 监听编译
 npm run lint     # 类型检查
+npm run changelog:auto  # 自动更新当天 CHANGELOG 核心变更
 ```
 
 ## 许可证
