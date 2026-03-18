@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "project_name": "loom",
+  "install_scope_policy": {
+    "default_scope": "project",
+    "fallback_scope": "global",
+    "switch_requires_explicit_user_intent": true,
+    "switch_requires_confirmation": true,
+    "global_scope_keywords": [
+      "全局安装",
+      "global install",
+      "install globally"
+    ]
+  },
+  "ai_install_protocol": {
+    "must_introduce_before_install": true,
+    "must_ask_consent_before_any_write": true,
+    "must_output_verification_after_install": true
+  }
+}

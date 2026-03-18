@@ -200,6 +200,11 @@ If user confirms:
 - If client supports MCP: use MCP setup
 - If client does not support MCP (e.g. OpenClaw): switch to CLI Wrapper
 
+[STEP 3.5 - Scope Decision (REQUIRED)]
+- Default to `project-first` scope
+- Use global scope only when user explicitly asks for "global install"
+- Require a second confirmation before switching from project to global
+
 [STEP 4 - Verification Output]
 After installation, output:
 - Which config files were changed
@@ -222,6 +227,16 @@ Call loom_list or loom_trace in chat
 ```
 
 > Goal: enforce a consistent "intro -> consent -> install -> verify" behavior across different AI clients.
+
+### 2.6 Install Scope Policy (Project-First)
+
+To avoid ambiguity around "global vs project", Loom uses an explicit policy:
+
+- Default installation scope: `project`
+- Use `global` only when user explicitly requests global install
+- Scope switch (project -> global) must require an extra confirmation
+
+Machine-readable policy file: `INSTALL_POLICY.json`
 
 ### 3. Use
 
