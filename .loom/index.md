@@ -1,6 +1,6 @@
 ---
-updated: 2026-03-18T14:53:04.997Z
-total_entries: 3
+updated: 2026-03-18T14:53:15.030Z
+total_entries: 4
 ---
 
 # Loom System Index
@@ -15,6 +15,7 @@ total_entries: 3
 
 - [Why Markdown Plus Git As Storage](decisions/why-markdown-plus-git-as-storage.md) — tags: decision, storage, markdown, git — updated: 2026-03-18T14:53:04.994Z
 - [Why MCP Over VS Code Plugin](decisions/why-mcp-over-vs-code-plugin.md) — tags: decision, mcp, architecture, vs-code — updated: 2026-03-18T14:52:56.309Z
+- [Why The Name Loom](decisions/why-the-name-loom.md) — tags: decision, naming, branding — updated: 2026-03-18T14:53:15.029Z
 
 ## Threads
 
