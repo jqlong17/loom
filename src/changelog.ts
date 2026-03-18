@@ -41,6 +41,11 @@ function dedupe(lines: string[]): string[] {
   return out;
 }
 
+function ensurePurposeSentence(line: string): string {
+  if (line.includes("目的是")) return line;
+  return `${line}，目的是让外部读者快速理解这次更新的价值。`;
+}
+
 export async function updateChangelog(
   workDir: string,
   highlights: string[],
@@ -48,7 +53,7 @@ export async function updateChangelog(
 ): Promise<ChangelogResult> {
   const targetDate = normalizeDate(date);
   const filePath = path.join(workDir, CHANGELOG_FILE);
-  const newItems = dedupe(highlights).map((h) => `- ${h}`);
+  const newItems = dedupe(highlights).map((h) => `- ${ensurePurposeSentence(h)}`);
 
   let raw = "";
   try {
@@ -120,22 +125,22 @@ function mapCommitToHighlight(message: string): string | null {
   if (skipPatterns.some((re) => re.test(msg))) return null;
 
   if (/incremental weave|append|section/i.test(msg)) {
-    return "新增 `loom_weave` 增量模式（`replace` / `append` / `section`）";
+    return "新增 `loom_weave` 增量模式（`replace` / `append` / `section`），目的是避免后续补充知识时覆盖历史内容。";
   }
   if (/deprecate/i.test(msg)) {
-    return "新增 `loom_deprecate`：可将旧条目标记废弃并指向替代方案";
+    return "新增 `loom_deprecate`：可将旧条目标记废弃并指向替代方案，目的是管理知识生命周期并减少过期信息误导。";
   }
   if (/reflection|reflect/i.test(msg)) {
-    return "新增 `loom_reflect`：知识库体检（冲突、过期、缺标签、可合并项）";
+    return "新增 `loom_reflect`：知识库体检（冲突、过期、缺标签、可合并项），目的是持续提升知识质量与一致性。";
   }
   if (/cross-client|claude|opencode|codex/i.test(msg)) {
-    return "完善多客户端接入文档：Cursor、VS Code Copilot、Claude Code、OpenCode、Codex CLI";
+    return "完善多客户端接入文档：Cursor、VS Code Copilot、Claude Code、OpenCode、Codex CLI，目的是降低接入门槛并扩大可用场景。";
   }
   if (/upgrade/i.test(msg)) {
-    return "新增 `loom_upgrade`：支持从 GitHub 拉取 Loom 本体更新";
+    return "新增 `loom_upgrade`：支持从 GitHub 拉取 Loom 本体更新，目的是让用户可以一句话完成版本升级。";
   }
   if (/trace|retriev|search/i.test(msg)) {
-    return "增强 `loom_trace`：支持分类/标签过滤、limit 与相关性排序";
+    return "增强 `loom_trace`：支持分类/标签过滤、limit 与相关性排序，目的是让知识检索结果更精准、更可用。";
   }
 
   return null;
