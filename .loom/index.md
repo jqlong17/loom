@@ -1,6 +1,6 @@
 ---
-updated: 2026-03-18T14:52:56.310Z
-total_entries: 2
+updated: 2026-03-18T14:53:04.997Z
+total_entries: 3
 ---
 
 # Loom System Index
@@ -13,6 +13,7 @@ total_entries: 2
 
 ## Decisions
 
+- [Why Markdown Plus Git As Storage](decisions/why-markdown-plus-git-as-storage.md) — tags: decision, storage, markdown, git — updated: 2026-03-18T14:53:04.994Z
 - [Why MCP Over VS Code Plugin](decisions/why-mcp-over-vs-code-plugin.md) — tags: decision, mcp, architecture, vs-code — updated: 2026-03-18T14:52:56.309Z
 
 ## Threads
