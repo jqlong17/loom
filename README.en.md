@@ -151,6 +151,78 @@ LOOM_WORK_DIR = "/your/project/root"
 
 </details>
 
+<details>
+<summary><b>OpenClaw (No MCP Support)</b></summary>
+
+If OpenClaw does not support MCP yet, use Loom CLI Wrapper directly:
+
+```bash
+# In Loom project directory
+npm install
+npm run build
+
+# OpenClaw can call this command
+./dist/cli.js trace --query "auth architecture" --json
+```
+
+Recommended command patterns for OpenClaw:
+
+- Write knowledge: `./dist/cli.js weave --category concepts --title "..." --content "..." --tags a,b --mode append --json`
+- Search knowledge: `./dist/cli.js trace --query "..." --category concepts --limit 5 --json`
+- Audit knowledge: `./dist/cli.js reflect --maxFindings 20 --json`
+
+> Note: CLI Wrapper is a compatibility layer and does not depend on MCP support.
+
+</details>
+
+### 2.5 AI-First Auto-Install Protocol (for any AI)
+
+When a user only shares the repo link (for example `https://github.com/jqlong17/loom`), ask the AI to follow this exact protocol:
+
+```text
+[ROLE]
+You are the Loom installation assistant.
+
+[INPUT]
+User provided GitHub link: https://github.com/jqlong17/loom
+
+[STEP 1 - Intro]
+Explain Loom in 2-3 sentences:
+- It is an MCP + Markdown + Git long-term memory system
+- It turns AI conversations into a traceable knowledge base
+
+[STEP 2 - Consent]
+You MUST ask for installation consent before running any command:
+"Do you want me to install Loom now? I will detect your client capability first and choose MCP or CLI Wrapper automatically."
+
+[STEP 3 - Install Path]
+If user confirms:
+- If client supports MCP: use MCP setup
+- If client does not support MCP (e.g. OpenClaw): switch to CLI Wrapper
+
+[STEP 4 - Verification Output]
+After installation, output:
+- Which config files were changed
+- Which commands/tools are now available
+- One minimal verification command
+
+[STEP 5 - If user declines]
+- Return only minimal setup instructions
+- Do not write or modify files
+```
+
+Recommended verification commands:
+
+```bash
+# MCP path
+Call loom_list or loom_trace in chat
+
+# CLI Wrapper path
+./dist/cli.js trace --query "loom architecture" --json
+```
+
+> Goal: enforce a consistent "intro -> consent -> install -> verify" behavior across different AI clients.
+
 ### 3. Use
 
 Once configured, Loom tools are available in your AI chat:
@@ -193,6 +265,7 @@ Once configured, Loom tools are available in your AI chat:
 | `loom_reflect` | Run a self-audit for conflicts, stale entries, missing tags, and merge candidates |
 | `loom_changelog` | Maintain public CHANGELOG grouped by day-level core changes |
 | `loom_upgrade` | Upgrade Loom MCP installation itself from GitHub |
+| `loom-cli` | Command-line compatibility layer for OpenClaw/any non-MCP agent |
 
 ## Knowledge Categories
 
@@ -261,6 +334,7 @@ npm run build    # Compile TypeScript
 npm run watch    # Watch mode compilation
 npm run lint     # Type check
 npm run changelog:auto  # Auto-update today's core changelog section
+npm run cli -- help  # Show CLI Wrapper commands
 ```
 
 ## License

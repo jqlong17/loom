@@ -153,6 +153,79 @@ LOOM_WORK_DIR = "/your/project/root"
 
 </details>
 
+<details>
+<summary><b>OpenClaw（无 MCP 适配）</b></summary>
+
+如果 OpenClaw 当前不支持 MCP，可直接使用 Loom CLI Wrapper：
+
+```bash
+# 在 Loom 项目目录内
+npm install
+npm run build
+
+# 让 OpenClaw 调用该命令即可
+./dist/cli.js trace --query "auth architecture" --json
+```
+
+推荐让 OpenClaw 调用以下命令模式：
+
+- 写入知识：`./dist/cli.js weave --category concepts --title "..." --content "..." --tags a,b --mode append --json`
+- 检索知识：`./dist/cli.js trace --query "..." --category concepts --limit 5 --json`
+- 体检知识：`./dist/cli.js reflect --maxFindings 20 --json`
+
+> 说明：CLI Wrapper 是 MCP 的兼容适配层，不依赖宿主是否支持 MCP。
+
+</details>
+
+### 2.5 AI-First 自动安装协议（给任意 AI）
+
+当用户只贴仓库链接（如 `https://github.com/jqlong17/loom`）时，建议 AI 严格按以下协议执行：
+
+```text
+[ROLE]
+你是 Loom 安装助手。
+
+[INPUT]
+用户提供 GitHub 链接：https://github.com/jqlong17/loom
+
+[STEP 1 - 简介]
+先用 2-3 句话说明 Loom：
+- 它是一个 MCP + Markdown + Git 的长期记忆系统
+- 用于把 AI 对话沉淀为可追溯知识库
+
+[STEP 2 - 授权确认]
+必须先询问用户是否安装，不得直接执行命令：
+“是否现在为你安装 Loom？我会先检测你的客户端是否支持 MCP，再自动选择 MCP 或 CLI Wrapper 方案。”
+
+[STEP 3 - 安装决策]
+如果用户确认安装：
+- 若客户端支持 MCP：走 MCP 安装
+- 若客户端不支持 MCP（如 OpenClaw）：自动切换 CLI Wrapper
+
+[STEP 4 - 验证输出]
+安装完成后必须输出：
+- 具体修改了哪些配置文件
+- 可用命令或可用工具名称
+- 一条最小可复现验证命令
+
+[STEP 5 - 拒绝安装]
+如果用户拒绝安装：
+- 仅返回最小接入说明
+- 不执行任何写操作
+```
+
+推荐验证命令：
+
+```bash
+# MCP 路径
+请在聊天中调用 loom_list 或 loom_trace
+
+# CLI Wrapper 路径
+./dist/cli.js trace --query "loom architecture" --json
+```
+
+> 这个协议的目的：让不同 AI 都遵循“先说明 -> 先授权 -> 再安装 -> 可验证”的统一行为，减少误操作和上下文歧义。
+
 ### 3. 开始使用
 
 配置完成后，你可以在 AI 聊天里直接使用 Loom：
@@ -195,6 +268,7 @@ LOOM_WORK_DIR = "/your/project/root"
 | `loom_reflect` | 执行知识库自检，输出冲突、过期、缺少标签、可合并项 |
 | `loom_changelog` | 维护公开 CHANGELOG（按日期聚合核心变更） |
 | `loom_upgrade` | 升级 Loom MCP 安装本体（从 GitHub 拉取最新） |
+| `loom-cli` | OpenClaw/任意 Agent 可调用的命令行适配层（非 MCP） |
 
 ## 知识分类
 
@@ -263,6 +337,7 @@ npm run build    # 编译 TypeScript
 npm run watch    # 监听编译
 npm run lint     # 类型检查
 npm run changelog:auto  # 自动更新当天 CHANGELOG 核心变更
+npm run cli -- help  # 查看 CLI Wrapper 命令
 ```
 
 ## 许可证

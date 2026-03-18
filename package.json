@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "loom": "dist/index.js"
+    "loom": "dist/index.js",
+    "loom-cli": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
@@ -13,7 +14,8 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "lint": "tsc --noEmit",
-    "changelog:auto": "tsx scripts/changelog-auto.ts"
+    "changelog:auto": "tsx scripts/changelog-auto.ts",
+    "cli": "node dist/cli.js"
   },
   "keywords": [
     "mcp",

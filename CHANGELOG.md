@@ -16,3 +16,6 @@
 - 新增 `loom_upgrade`：支持从 GitHub 拉取 Loom 本体更新，目的是让用户可以一句话完成版本升级。
 - 增强 `loom_trace`：支持分类/标签过滤、limit 与相关性排序，目的是让知识检索结果更精准、更可用。
 - 完善多客户端接入文档：Cursor、VS Code Copilot、Claude Code、OpenCode、Codex CLI，目的是降低接入门槛并扩大可用场景。
+- 新增 `loom_changelog` 与 `CHANGELOG.md` 自动更新流程，目的是对外持续公开每日核心能力变化并降低维护成本。
+- 新增 `loom-cli` 命令行适配层，目的是让不支持 MCP 的客户端（如 OpenClaw）也能调用 Loom 核心能力。
+- 在 README 增加 AI-First 自动安装协议，目的是让不同 AI 在拿到仓库链接后遵循一致的“先说明、先授权、再安装”流程。
