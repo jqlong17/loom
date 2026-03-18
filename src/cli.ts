@@ -15,6 +15,8 @@ import {
 import { GitManager } from "./git-manager.js";
 import { updateChangelog, collectDailyHighlightsFromGit } from "./changelog.js";
 import { upgradeFromGit } from "./updater.js";
+import { executeIngestKnowledge } from "./app/usecases/ingest-knowledge.js";
+import { executeRunDoctor } from "./app/usecases/run-doctor.js";
 
 type ArgMap = Record<string, string | boolean>;
 
@@ -99,7 +101,9 @@ Usage:
 
 Commands:
   init
-  weave --category <concepts|decisions|threads> --title <t> --content <text> [--tags a,b] [--mode replace|append|section]
+  weave --category <concepts|decisions|threads> --title <t> --content <text> [--tags a,b] [--links a,b] [--domain d] [--mode replace|append|section]
+  ingest --category <concepts|decisions|threads> --title <t> --content <text> [--tags a,b] [--links a,b] [--domain d] [--mode replace|append|section] [--commit true|false] [--changelog true|false]
+  doctor [--staleDays 30] [--includeThreads true|false] [--maxFindings 20] [--failOn none|error|warn]
   closeout --title <t> --content <text> [--category threads|concepts] [--tags a,b] [--mode append|replace|section]
   trace --query <text> [--category <c>] [--tags a,b] [--limit n]
   read --category <c> --slug <filename-without-md>
@@ -159,24 +163,79 @@ async function main(): Promise<void> {
       if (!["concepts", "decisions", "threads"].includes(category)) {
         fail("invalid --category");
       }
-
-      const result = await weave(loomRoot, {
-        category: category as "concepts" | "decisions" | "threads",
-        title,
-        content,
-        tags: asList(args, "tags"),
-        mode: asString(args, "mode") as "replace" | "append" | "section" | undefined,
+      const output = await executeIngestKnowledge({
+        workDir: WORK_DIR,
+        loomRoot,
+        config,
+        git,
+        command: {
+          category: category as "concepts" | "decisions" | "threads",
+          title,
+          content,
+          tags: asList(args, "tags"),
+          links: asList(args, "links"),
+          domain: asString(args, "domain"),
+          mode: asString(args, "mode") as "replace" | "append" | "section" | undefined,
+          commit: true,
+          changelog: false,
+        },
       });
-      await rebuildIndex(loomRoot);
-      const commitResult = await git.commitChanges(
-        [result.filePath, path.join(loomRoot, "index.md")],
-        `${result.isUpdate ? "update" : "add"} ${category}/${title}`,
-      );
+      if (!output.ok || !output.data) {
+        fail(output.issues.map((i) => i.suggestion ?? i.message).join("\n"));
+      }
+
       print(
         {
           ok: true,
-          ...result,
-          git: commitResult.message,
+          ...output.data.ingest,
+          lint: output.data.lintIssues,
+          git: output.data.git,
+        },
+        jsonMode,
+      );
+      return;
+    }
+
+    case "ingest": {
+      const category = asString(args, "category");
+      const title = asString(args, "title");
+      const content = asString(args, "content");
+      if (!category || !title || !content) {
+        fail("ingest requires --category --title --content");
+      }
+      if (!["concepts", "decisions", "threads"].includes(category)) {
+        fail("invalid --category");
+      }
+
+      const output = await executeIngestKnowledge({
+        workDir: WORK_DIR,
+        loomRoot,
+        config,
+        git,
+        command: {
+        category: category as "concepts" | "decisions" | "threads",
+        title,
+        content,
+          tags: asList(args, "tags"),
+          links: asList(args, "links"),
+          domain: asString(args, "domain"),
+          mode: asString(args, "mode") as "replace" | "append" | "section" | undefined,
+          commit: asBool(args, "commit", true) ?? true,
+          changelog: asBool(args, "changelog", false) ?? false,
+          changelogDate: asString(args, "date"),
+        },
+      });
+      if (!output.ok || !output.data) {
+        fail(output.issues.map((i) => i.suggestion ?? i.message).join("\n"));
+      }
+
+      print(
+        {
+          ok: true,
+          ingest: output.data.ingest,
+          lint: output.data.lintIssues,
+          changelog: output.data.changelog ?? { skipped: true },
+          git: output.data.git,
         },
         jsonMode,
       );
@@ -313,6 +372,39 @@ async function main(): Promise<void> {
         maxFindings: asNumber(args, "maxFindings") ?? 20,
       });
       print({ ok: true, ...report }, jsonMode);
+      return;
+    }
+
+    case "doctor": {
+      const failOn = (asString(args, "failOn") ?? "error").toLowerCase();
+      if (!["none", "error", "warn"].includes(failOn)) {
+        fail("doctor --failOn must be one of: none|error|warn");
+      }
+
+      const report = await executeRunDoctor({
+        loomRoot,
+        command: {
+          staleDays: asNumber(args, "staleDays") ?? 30,
+          includeThreads: asBool(args, "includeThreads", true) ?? true,
+          maxFindings: asNumber(args, "maxFindings") ?? 20,
+          failOn: failOn as "none" | "error" | "warn",
+        },
+      });
+      if (!report.ok || !report.data) {
+        fail("doctor execution failed");
+      }
+
+      print(
+        {
+          ok: !report.data.shouldFail,
+          ...report.data,
+        },
+        jsonMode,
+      );
+
+      if (report.data.shouldFail) {
+        process.exitCode = 2;
+      }
       return;
     }
 

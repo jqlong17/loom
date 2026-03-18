@@ -29,3 +29,9 @@
 - 新增 Memory Lint（写入前校验与统一错误提示格式）并接入 `loom_weave` 与 probe 回写链路，目的是在低成本下提升记忆内容质量与后续检索可用性。
 - 新增 `.loom/schema/technical.md` 与 `.loom/schema/business.md` 初始化骨架，并在 `loom_weave` 支持 `domain/links` 字段，目的是为技术与业务记忆建立统一的宏观图谱主干。
 - 增强 `loom_reflect` 图谱体检（`dangling_link` / `isolated_node`）并在 lint 中提示缺失 `domain/links`，目的是提前发现知识断链与孤岛，降低记忆系统语义漂移风险。
+- 新增 `loom-cli ingest` 与 `loom-cli doctor`（CLI-first 自动化路径），目的是将“是否主动调用”从模型行为问题转化为可脚本、可门禁、可集成 CI 的工程流程。
+- 重构为 `CLI-first + MCP-adapter` 架构（新增 core 服务层并让 CLI/MCP 共用同一流程），目的是降低双入口逻辑分叉带来的维护成本并提升回归一致性。
+- 引入 Vitest 回归测试（含覆盖率阈值与 `.test-logs/latest.log` 复现日志），目的是在功能迭代时提供可验证、可复现的质量基线。
+- 新增 `contracts + usecases` 抽象层并将 CLI/MCP 接入统一用例返回协议，目的是让系统能力与入口解耦，便于后续扩展 HTTP/Daemon 等新适配层。
+- 新增 `docs/METRICS.md` 并将指标体系接入 roadmap/plan/readme，目的是让下一步架构演进具备统一的北极星衡量标准与周度复盘机制。
+- 在 roadmap 与 implementation plan 中新增“数据反馈闭环”执行主线（snapshot/report/event-mapping/PR 指标影响），目的是将量化指标从“观测”升级为“驱动决策”的工程机制。

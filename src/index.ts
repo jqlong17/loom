@@ -35,6 +35,8 @@ import {
   type ProbeAnswerRecord,
 } from "./probe.js";
 import { lintMemoryEntry, formatLintIssues } from "./memory-lint.js";
+import { executeIngestKnowledge } from "./app/usecases/ingest-knowledge.js";
+import { executeRunDoctor } from "./app/usecases/run-doctor.js";
 
 const WORK_DIR = process.env.LOOM_WORK_DIR ?? process.cwd();
 const SERVER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -396,43 +398,38 @@ server.tool(
       normalizedTags.push("core");
     }
 
-    const lint = lintMemoryEntry({
-      title,
-      category,
-      content,
-      tags: normalizedTags,
-      links,
-      domain,
+    const git = new GitManager(WORK_DIR, config);
+    const ingestResult = await executeIngestKnowledge({
+      workDir: WORK_DIR,
+      loomRoot,
+      config,
+      git,
+      command: {
+        category,
+        title,
+        content,
+        tags: normalizedTags,
+        links,
+        domain,
+        mode,
+        commit: true,
+        changelog: false,
+      },
     });
-    if (!lint.ok) {
+
+    if (!ingestResult.ok || !ingestResult.data) {
       return {
         content: [
           {
             type: "text",
-            text: `${formatLintIssues(lint)}\nWrite aborted due to lint errors.`,
+            text:
+              ingestResult.issues
+                .map((i) => i.suggestion ?? i.message)
+                .join("\n") + "\nWrite aborted due to lint errors.",
           },
         ],
       };
     }
-
-    const result = await weave(loomRoot, {
-      title,
-      category,
-      content,
-      tags: normalizedTags,
-      links,
-      domain,
-      mode,
-    });
-
-    await rebuildIndex(loomRoot);
-
-    const git = new GitManager(WORK_DIR, config);
-    const action = result.isUpdate ? "update" : "add";
-    const commitResult = await git.commitChanges(
-      [result.filePath, `${loomRoot}/index.md`],
-      `${action} ${category}/${title}`,
-    );
 
     let pushMsg = "";
     if (config.autoPush) {
@@ -445,16 +442,147 @@ server.tool(
         {
           type: "text",
           text: [
-            `${result.isUpdate ? "Updated" : "Created"}: ${category}/${title}`,
-            `Mode: ${result.mode}`,
-            `File: ${result.filePath}`,
+            `${ingestResult.data.ingest.isUpdate ? "Updated" : "Created"}: ${category}/${title}`,
+            `Mode: ${ingestResult.data.ingest.mode}`,
+            `File: ${ingestResult.data.ingest.filePath}`,
             `Tags: ${normalizedTags.join(", ") || "none"}`,
             `Links: ${links?.join(", ") || "none"}`,
             `Domain: ${domain || "none"}`,
-            lint.issues.length > 0 ? formatLintIssues(lint) : "",
-            `Git: ${commitResult.message}${pushMsg}`,
+            ingestResult.data.lintIssues.length > 0 ? ingestResult.data.lintReport : "",
+            `Git: ${ingestResult.data.git ?? "skipped"}${pushMsg}`,
             `Index rebuilt.`,
           ].join("\n"),
+        },
+      ],
+    };
+  },
+);
+
+// ─── Tool: loom_ingest ────────────────────────────────────────
+server.tool(
+  "loom_ingest",
+  "CLI-first style one-shot ingestion: lint + weave + index (+ optional changelog/commit). MCP adapter over core ingest pipeline.",
+  {
+    category: z.enum(["concepts", "decisions", "threads"]),
+    title: z.string(),
+    content: z.string(),
+    tags: z.array(z.string()).optional(),
+    links: z.array(z.string()).optional(),
+    domain: z.string().optional(),
+    mode: z.enum(["replace", "append", "section"]).optional(),
+    commit: z.boolean().optional(),
+    changelog: z.boolean().optional(),
+    changelogDate: z
+      .string()
+      .optional()
+      .describe("Date for changelog aggregation in YYYY-MM-DD"),
+  },
+  async ({
+    category,
+    title,
+    content,
+    tags,
+    links,
+    domain,
+    mode,
+    commit,
+    changelog,
+    changelogDate,
+  }) => {
+    const { config, loomRoot } = await getRuntimeContext();
+    await ensureLoomStructure(loomRoot);
+    const normalizedTags = Array.from(new Set([...(tags ?? [])]));
+    const git = new GitManager(WORK_DIR, config);
+    const result = await executeIngestKnowledge({
+      workDir: WORK_DIR,
+      loomRoot,
+      config,
+      git,
+      command: {
+        category,
+        title,
+        content,
+        tags: normalizedTags,
+        links,
+        domain,
+        mode,
+        commit: commit ?? true,
+        changelog: changelog ?? false,
+        changelogDate,
+      },
+    });
+
+    if (!result.ok || !result.data) {
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              result.issues.map((i) => i.suggestion ?? i.message).join("\n") +
+              "\nIngest aborted.",
+          },
+        ],
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: [
+            `Ingested: ${category}/${title}`,
+            `File: ${result.data.ingest.filePath}`,
+            `Mode: ${result.data.ingest.mode}`,
+            `Git: ${result.data.git ?? "skipped"}`,
+            result.data.changelog
+              ? `Changelog: ${
+                  "skipped" in result.data.changelog
+                    ? `skipped (${result.data.changelog.reason ?? "no-op"})`
+                    : `${result.data.changelog.date} +${result.data.changelog.added}`
+                }`
+              : "Changelog: skipped",
+            result.data.lintIssues.length > 0
+              ? result.data.lintReport
+              : "Memory lint: no issues.",
+          ].join("\n"),
+        },
+      ],
+    };
+  },
+);
+
+// ─── Tool: loom_doctor ────────────────────────────────────────
+server.tool(
+  "loom_doctor",
+  "Run health gate for memory graph quality. Returns structured severity and gate decision.",
+  {
+    staleDays: z.number().optional(),
+    includeThreads: z.boolean().optional(),
+    maxFindings: z.number().optional(),
+    failOn: z.enum(["none", "error", "warn"]).optional(),
+  },
+  async ({ staleDays, includeThreads, maxFindings, failOn }) => {
+    const { loomRoot } = await getRuntimeContext();
+    await ensureLoomStructure(loomRoot);
+    const report = await executeRunDoctor({
+      loomRoot,
+      command: {
+        staleDays: staleDays ?? 30,
+        includeThreads: includeThreads ?? true,
+        maxFindings: maxFindings ?? 20,
+        failOn: failOn ?? "error",
+      },
+    });
+    if (!report.ok || !report.data) {
+      return {
+        content: [{ type: "text", text: "Doctor execution failed." }],
+      };
+    }
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ ok: !report.data.shouldFail, ...report.data }, null, 2),
         },
       ],
     };

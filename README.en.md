@@ -261,10 +261,10 @@ Once configured, Loom tools are available in your AI chat:
   - `links`: related entry paths (e.g. `concepts/three-layer-architecture`)
 - `loom_trace` supports `category`, `tags`, and `limit` for focused retrieval
 - `loom_deprecate` marks outdated entries as deprecated and can point to `superseded_by`
-- `loom_probe_start` / `loom_probe_commit` provide an active questioning state machine:
-  - Step 1: call `loom_probe_start` to generate 1-5 questions and create a `session_id`
-  - Step 2: after user replies, call `loom_probe_commit(session_id, answers)` to persist Q&A into `threads`
-  - Compatibility: `loom_probe` remains available and maps to start/commit flow
+- `loom_probe` provides the active questioning state machine (current MCP entry):
+  - Step 1: call with `record=false` and `context` to generate questions and a `session_id`
+  - Step 2: call with `record=true` and `session_id + answers` to persist Q&A into `threads`
+  - If `session_id` is omitted but `context` is provided, Loom auto-creates a session before commit
   - Memory Lint runs before write; ERROR-level issues block writes with actionable suggestions
 - `loom_changelog` maintains public `CHANGELOG.md` grouped by date:
   - `mode=auto`: infer daily core changes from git commits
@@ -303,12 +303,50 @@ For `concepts` / `decisions`, prefer adding `domain` and `links` so memory forms
 - `dangling_link`: a link target does not exist
 - `isolated_node`: entry has no incoming/outgoing links (except `core` entries)
 
-## Tools
+### 4.3 CLI-First (Recommended Automation Path)
+
+For reliable triggering, scripting, and CI integration, prefer CLI workflows:
+
+- `ingest`: one command for lint + weave + index (optional changelog/commit)
+- `doctor`: unified health check with gate control via `--failOn`
+
+Examples:
+
+```bash
+# One-shot ingestion (no commit, inspect output first)
+node dist/cli.js ingest \
+  --category concepts \
+  --title "Payment Flow Boundary" \
+  --content "## Context\n...\n\n## Conclusion\n..." \
+  --tags architecture,payment \
+  --domain architecture \
+  --links concepts/three-layer-architecture,decisions/why-mcp-over-vs-code-plugin \
+  --commit false \
+  --json
+
+# Health gate (exit code 2 on error-level findings)
+node dist/cli.js doctor --failOn error --json
+```
+
+### 4.4 CLI-first + MCP-adapter Architecture
+
+The codebase now follows a "capability-down, adapter-up" structure:
+
+- `src/core/`: shared core pipelines (e.g., ingest / doctor)
+- `src/app/usecases/`: use-case layer with unified application results
+- `src/cli.ts`: primary entrypoint for reliable automation
+- `src/index.ts`: MCP adapter mapping chat tools to the same use-cases
+
+This avoids logic drift between CLI and MCP paths and improves long-term regression consistency.
+
+## MCP Tools
 
 | Tool | Description |
 |------|-------------|
 | `loom_init` | Initialize `.loom/` directory structure in the project |
 | `loom_weave` | Write a knowledge entry (concept, decision, or thread) |
+| `loom_ingest` | One-shot pipeline (lint + weave + index, optional changelog/commit) |
+| `loom_doctor` | Run memory health gate with structured severity output |
 | `loom_trace` | Search the knowledge base by keyword |
 | `loom_read` | Read the full content of a specific entry |
 | `loom_index` | Read global index + mandatory-read set (first step) |
@@ -317,12 +355,13 @@ For `concepts` / `decisions`, prefer adding `domain` and `links` so memory forms
 | `loom_log` | Show Git history of knowledge changes |
 | `loom_deprecate` | Mark an entry deprecated with reason and optional replacement pointer |
 | `loom_reflect` | Run a self-audit for conflicts, stale entries, missing tags, and merge candidates |
-| `loom_probe_start` | Start proactive inquiry and return questions with `session_id` |
-| `loom_probe_commit` | Commit answers for a session and persist into `threads` |
-| `loom_probe` | Compatibility wrapper for previous probe calls |
+| `loom_probe` | Active inquiry + memory persistence (same tool for start/commit) |
 | `loom_changelog` | Maintain public CHANGELOG grouped by day-level core changes |
 | `loom_upgrade` | Upgrade Loom MCP installation itself from GitHub |
-| `loom-cli` | Command-line compatibility layer for OpenClaw/any non-MCP agent |
+
+## CLI Commands (`node dist/cli.js <command>`)
+
+`init`, `weave`, `ingest`, `closeout`, `trace`, `read`, `list`, `deprecate`, `reflect`, `doctor`, `sync`, `log`, `changelog`, `upgrade`
 
 ## Knowledge Categories
 
@@ -335,13 +374,18 @@ For `concepts` / `decisions`, prefer adding `domain` and `links` so memory forms
 ```
 .loom/
 ├── index.md          # Auto-generated index of all knowledge
+├── schema/           # Macro graph skeleton
+│   ├── technical.md
+│   └── business.md
 ├── concepts/         # System concepts and definitions
 │   ├── payment-flow.md
 │   └── user-auth.md
 ├── decisions/        # Architecture Decision Records
 │   └── why-postgresql.md
-└── threads/          # Conversation summaries
-    └── 2026-03-18-api-design.md
+├── threads/          # Conversation summaries
+│   └── 2026-03-18-api-design.md
+└── probes/           # Probe session states
+    └── probe-xxxxx.json
 ```
 
 ## Configuration
@@ -383,6 +427,22 @@ Loom's knowledge base is just a folder of Markdown files in your Git repo. Team 
   - MCP tool: call `loom_changelog` with `mode=auto`
   - CLI: `npm run changelog:auto`
 
+## Roadmap and Planning Collaboration
+
+To keep Loom direction visible, long-term, and continuously evolvable, the repo includes:
+
+- `docs/ROADMAP.md`: long-term product and architecture direction (continuously evolving)
+- `docs/IMPLEMENTATION_PLAN.md`: executable checklist for incremental delivery
+- `docs/BRAINSTORM.md`: idea backlog for early-stage proposals
+- `docs/METRICS.md`: north-star metrics and weekly tracking template
+
+Suggested collaboration flow:
+
+1. Add ideas to `docs/BRAINSTORM.md`
+2. Promote mature ideas into `docs/ROADMAP.md` via PR
+3. Break down roadmap items in `docs/IMPLEMENTATION_PLAN.md`
+4. Update checklist, validation notes, and metric impact in implementation PRs (see `docs/METRICS.md`)
+
 ## Development
 
 ```bash
@@ -390,9 +450,29 @@ npm run dev      # Run with tsx (hot reload)
 npm run build    # Compile TypeScript
 npm run watch    # Watch mode compilation
 npm run lint     # Type check
+npm test         # Run tests
+npm run test:coverage   # Run coverage checks with thresholds
+npm run test:regression # Produce reproducible logs at .test-logs/latest.log
 npm run changelog:auto  # Auto-update today's core changelog section
 npm run cli -- help  # Show CLI Wrapper commands
 ```
+
+## PR Contribution Workflow
+
+If you want to contribute via PR, use this flow:
+
+1. Create a feature branch (prefer CLI-first path when adding capabilities)
+2. Run locally:
+   - `npm run build`
+   - `npm run lint`
+   - `npm run test:coverage`
+3. For reproducibility, attach key excerpts from `.test-logs/latest.log`
+4. Update README / CHANGELOG for user-visible behavior changes
+5. Open PR with exact verification commands and outputs
+
+Notes:
+- Test cases are tracked in the repository (not ignored) so contributors can run the same regression suite
+- Only generated test artifacts are ignored (`coverage/`, `.test-logs/`)
 
 ## License
 

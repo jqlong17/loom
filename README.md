@@ -264,10 +264,10 @@ npm run build
   - `links`：关联条目路径（如 `concepts/three-layer-architecture`）
 - `loom_trace` 支持 `category`、`tags`、`limit` 参数，便于精准检索
 - `loom_deprecate` 可将旧条目标记为废弃，并可选指向 `superseded_by`
-- `loom_probe_start` / `loom_probe_commit` 支持主动提问状态机：
-  - 第一步：`loom_probe_start` 基于当前对话和已有记忆生成 1~5 条澄清问题，并创建 `session_id`
-  - 第二步：用户回答后，调用 `loom_probe_commit(session_id, answers)` 回写到 `threads`
-  - 兼容入口：`loom_probe` 仍可用（内部走 start/commit 流程）
+- `loom_probe` 支持主动提问状态机（当前 MCP 入口）：
+  - 第一步：`record=false`，传入 `context` 生成问题与 `session_id`
+  - 第二步：`record=true`，传入 `session_id + answers` 回写到 `threads`
+  - 若未提供 `session_id` 但给了 `context`，会自动创建会话并提交回答
   - 写入前会执行 Memory Lint；若出现 ERROR 级问题会拒绝写入，并返回修复建议
 - `loom_changelog` 可按日期维护公开 `CHANGELOG.md`：
   - `mode=auto`：自动从当天 git 提交提炼核心变化
@@ -309,12 +309,50 @@ Loom 初始化后会自动创建：
 - `dangling_link`：链接目标不存在
 - `isolated_node`：没有任何入边/出边的孤立条目（`core` 条目除外）
 
-## 工具列表
+### 4.3 CLI-First（推荐自动化路径）
+
+如果你希望“稳定触发、可脚本化、可接入 CI”，建议优先使用 CLI：
+
+- `ingest`：一条命令完成 lint + weave + index（可选 changelog/commit）
+- `doctor`：统一健康检查输出，可通过 `--failOn` 做门禁
+
+示例：
+
+```bash
+# 一键收口（不提交，先看结果）
+node dist/cli.js ingest \
+  --category concepts \
+  --title "支付链路边界" \
+  --content "## 背景\n...\n\n## 结论\n..." \
+  --tags architecture,payment \
+  --domain architecture \
+  --links concepts/three-layer-architecture,decisions/why-mcp-over-vs-code-plugin \
+  --commit false \
+  --json
+
+# 记忆体检门禁（发现 error 即退出码 2）
+node dist/cli.js doctor --failOn error --json
+```
+
+### 4.4 CLI-first + MCP-adapter 架构
+
+当前代码结构采用“能力下沉、入口适配”：
+
+- `src/core/`：共享核心流程（如 ingest / doctor）
+- `src/app/usecases/`：用例层，统一业务返回结构
+- `src/cli.ts`：主入口（稳定自动化与脚本化）
+- `src/index.ts`：MCP 适配层（对话工具映射到同一用例）
+
+这样可避免 CLI 与 MCP 双入口逻辑分叉，提升回归一致性与长期可维护性。
+
+## MCP 工具列表
 
 | Tool | 说明 |
 |------|------|
 | `loom_init` | 初始化项目中的 `.loom/` 目录结构 |
 | `loom_weave` | 写入知识条目（概念 / 决策 / 线程） |
+| `loom_ingest` | 一键收口（lint + weave + index，可选 changelog/commit） |
+| `loom_doctor` | 运行记忆健康门禁并返回结构化严重级别 |
 | `loom_trace` | 按关键词检索知识库 |
 | `loom_read` | 读取指定条目的完整内容 |
 | `loom_index` | 读取全局索引（分层披露第一步） |
@@ -323,12 +361,13 @@ Loom 初始化后会自动创建：
 | `loom_log` | 查看知识变更的 Git 历史 |
 | `loom_deprecate` | 将旧条目标记为 deprecated，并记录废弃原因和替代项 |
 | `loom_reflect` | 执行知识库自检，输出冲突、过期、缺少标签、可合并项 |
-| `loom_probe_start` | 启动主动提问会话，生成问题并返回 `session_id` |
-| `loom_probe_commit` | 提交会话回答并回写 `threads`，完成状态机闭环 |
-| `loom_probe` | 兼容包装入口（仍支持旧参数） |
+| `loom_probe` | 主动提问与回写记忆（同一工具支持 start/commit 两阶段） |
 | `loom_changelog` | 维护公开 CHANGELOG（按日期聚合核心变更） |
 | `loom_upgrade` | 升级 Loom MCP 安装本体（从 GitHub 拉取最新） |
-| `loom-cli` | OpenClaw/任意 Agent 可调用的命令行适配层（非 MCP） |
+
+## CLI 命令列表（`node dist/cli.js <command>`）
+
+`init`、`weave`、`ingest`、`closeout`、`trace`、`read`、`list`、`deprecate`、`reflect`、`doctor`、`sync`、`log`、`changelog`、`upgrade`
 
 ## 知识分类
 
@@ -341,13 +380,18 @@ Loom 初始化后会自动创建：
 ```
 .loom/
 ├── index.md          # 自动生成的知识索引
+├── schema/           # 宏观图谱骨架
+│   ├── technical.md
+│   └── business.md
 ├── concepts/         # 系统概念与定义
 │   ├── payment-flow.md
 │   └── user-auth.md
 ├── decisions/        # 架构决策记录
 │   └── why-postgresql.md
-└── threads/          # 对话/讨论沉淀
-    └── 2026-03-18-api-design.md
+├── threads/          # 对话/讨论沉淀
+│   └── 2026-03-18-api-design.md
+└── probes/           # 主动提问会话状态（probe sessions）
+    └── probe-xxxxx.json
 ```
 
 ## 配置说明
@@ -388,6 +432,22 @@ Loom 的知识库本质上就是 Git 仓库里的一组 Markdown 文件，多人
 - 可使用以下方式自动更新：
   - MCP 工具：调用 `loom_changelog`（`mode=auto`）
   - 命令行：`npm run changelog:auto`
+
+## 路线图与规划协作
+
+为了让社区一起规划 Loom 的长期方向并持续动态演进，项目新增公开规划文档：
+
+- `docs/ROADMAP.md`：产品与架构长期方向（动态演进）
+- `docs/IMPLEMENTATION_PLAN.md`：可执行任务清单（逐项打勾）
+- `docs/BRAINSTORM.md`：脑爆创意池（想法先沉淀再转 roadmap）
+- `docs/METRICS.md`：北极星指标与周度追踪模板（判断方向是否有效）
+
+建议协作方式：
+
+1. 先在 `docs/BRAINSTORM.md` 记录想法
+2. 通过 PR 将成熟想法升级到 `docs/ROADMAP.md`
+3. 拆解为 `docs/IMPLEMENTATION_PLAN.md` 可执行任务
+4. 实现后在 PR 中同步更新勾选状态、验证结果与指标影响（参考 `docs/METRICS.md`）
 
 ## 强制收口（推荐）
 
@@ -432,10 +492,30 @@ npm run dev      # 使用 tsx 运行（开发模式）
 npm run build    # 编译 TypeScript
 npm run watch    # 监听编译
 npm run lint     # 类型检查
+npm test         # 运行单元/集成测试
+npm run test:coverage   # 运行覆盖率测试（含阈值）
+npm run test:regression # 生成可复现测试日志：.test-logs/latest.log
 npm run changelog:auto  # 自动更新当天 CHANGELOG 核心变更
 npm run cli -- help  # 查看 CLI Wrapper 命令
 npm run hooks:install  # 安装 post-commit 自动更新 hook
 ```
+
+## 贡献 PR 建议流程
+
+如果你希望贡献 PR，建议按以下步骤：
+
+1. 新建分支并实现功能（优先走 CLI-first 路径）
+2. 本地执行：
+   - `npm run build`
+   - `npm run lint`
+   - `npm run test:coverage`
+3. 如需复现测试过程，附上 `.test-logs/latest.log` 关键片段
+4. 更新 README / CHANGELOG 中与功能对应的说明
+5. 发起 PR 并说明验证命令与结果
+
+说明：
+- 测试用例会纳入仓库（不忽略），便于贡献者在提交前跑同样的回归测试
+- 仅忽略测试产物（如 `coverage/`、`.test-logs/`）
 
 ## 许可证
 
