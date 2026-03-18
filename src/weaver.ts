@@ -3,11 +3,14 @@ import * as path from "path";
 import { type LoomCategory } from "./config.js";
 import { slugify } from "./utils/slug.js";
 
+export type WeaveMode = "replace" | "append" | "section";
+
 export interface KnowledgeEntry {
   title: string;
   category: LoomCategory;
   content: string;
   tags?: string[];
+  mode?: WeaveMode;
 }
 
 interface Frontmatter {
@@ -16,6 +19,7 @@ interface Frontmatter {
   tags: string;
   category: string;
   status: "active" | "deprecated";
+  superseded_by?: string;
 }
 
 function buildFrontmatter(
@@ -52,31 +56,68 @@ export function categoryToDir(category: LoomCategory): string {
   return category;
 }
 
+function extractBody(raw: string): string {
+  const fmEnd = raw.indexOf("---", 4);
+  if (fmEnd < 0) return raw;
+  const afterFm = raw.slice(fmEnd + 3).trimStart();
+  const titleEnd = afterFm.match(/^# .+\n+/);
+  if (!titleEnd) return afterFm;
+  return afterFm.slice(titleEnd[0].length);
+}
+
 export async function weave(
   loomRoot: string,
   entry: KnowledgeEntry,
-): Promise<{ filePath: string; isUpdate: boolean }> {
+): Promise<{ filePath: string; isUpdate: boolean; mode: WeaveMode }> {
   const slug = slugify(entry.title);
   const dir = path.join(loomRoot, categoryToDir(entry.category));
   await fs.mkdir(dir, { recursive: true });
 
   const filePath = path.join(dir, `${slug}.md`);
+  let existingRaw: string | undefined;
   let existingFm: Frontmatter | undefined;
   let isUpdate = false;
 
   try {
-    const existing = await fs.readFile(filePath, "utf-8");
-    existingFm = parseFrontmatter(existing);
+    existingRaw = await fs.readFile(filePath, "utf-8");
+    existingFm = parseFrontmatter(existingRaw);
     isUpdate = true;
   } catch {
     // new file
   }
 
+  const mode = entry.mode ?? "replace";
   const frontmatter = buildFrontmatter(entry, existingFm);
-  const fileContent = `${frontmatter}\n\n# ${entry.title}\n\n${entry.content}\n`;
+  let body: string;
 
+  if (!isUpdate || mode === "replace") {
+    body = entry.content;
+  } else if (mode === "append") {
+    const oldBody = extractBody(existingRaw!);
+    const separator = `\n\n---\n\n_Appended on ${new Date().toISOString().slice(0, 10)}:_\n\n`;
+    body = oldBody.trimEnd() + separator + entry.content;
+  } else {
+    // "section" mode: replace a matching ## heading, or append as new section
+    const oldBody = extractBody(existingRaw!);
+    const sectionHeading = entry.content.match(/^## .+/m)?.[0];
+    if (sectionHeading) {
+      const escaped = sectionHeading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const sectionRe = new RegExp(
+        `${escaped}[\\s\\S]*?(?=\\n## |$)`,
+      );
+      if (sectionRe.test(oldBody)) {
+        body = oldBody.replace(sectionRe, entry.content.trimEnd());
+      } else {
+        body = oldBody.trimEnd() + "\n\n" + entry.content;
+      }
+    } else {
+      body = oldBody.trimEnd() + "\n\n" + entry.content;
+    }
+  }
+
+  const fileContent = `${frontmatter}\n\n# ${entry.title}\n\n${body}\n`;
   await fs.writeFile(filePath, fileContent, "utf-8");
-  return { filePath, isUpdate };
+  return { filePath, isUpdate, mode };
 }
 
 export interface TraceResult {
@@ -391,6 +432,78 @@ export async function readKnowledge(
   } catch {
     return null;
   }
+}
+
+export interface DeprecateResult {
+  success: boolean;
+  filePath: string;
+  message: string;
+}
+
+export async function deprecateEntry(
+  loomRoot: string,
+  category: LoomCategory,
+  slug: string,
+  reason: string,
+  supersededBy?: string,
+): Promise<DeprecateResult> {
+  const filePath = path.join(loomRoot, category, `${slug}.md`);
+  let raw: string;
+  try {
+    raw = await fs.readFile(filePath, "utf-8");
+  } catch {
+    return {
+      success: false,
+      filePath,
+      message: `Entry not found: ${category}/${slug}`,
+    };
+  }
+
+  const fm = parseFrontmatter(raw);
+  if (fm?.status === "deprecated") {
+    return {
+      success: true,
+      filePath,
+      message: `Already deprecated: ${category}/${slug}`,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const newFmFields: Record<string, string> = {
+    created: fm?.created ?? now,
+    updated: now,
+    tags: fm?.tags ?? "none",
+    category,
+    status: "deprecated",
+  };
+  if (supersededBy) {
+    newFmFields.superseded_by = supersededBy;
+  }
+
+  const fmLines = Object.entries(newFmFields).map(([k, v]) => `${k}: ${v}`);
+  const newFm = `---\n${fmLines.join("\n")}\n---`;
+
+  const fmEnd = raw.indexOf("---", 4);
+  const body = fmEnd >= 0 ? raw.slice(fmEnd + 3) : raw;
+
+  const deprecationNotice = `\n\n> **DEPRECATED** (${now.slice(0, 10)}): ${reason}${supersededBy ? ` → See: ${supersededBy}` : ""}\n`;
+
+  const titleMatch = body.match(/^(\s*# .+\n)/m);
+  let newBody: string;
+  if (titleMatch && titleMatch.index !== undefined) {
+    const insertPos = titleMatch.index + titleMatch[0].length;
+    newBody =
+      body.slice(0, insertPos) + deprecationNotice + body.slice(insertPos);
+  } else {
+    newBody = deprecationNotice + body;
+  }
+
+  await fs.writeFile(filePath, newFm + newBody, "utf-8");
+  return {
+    success: true,
+    filePath,
+    message: `Deprecated: ${category}/${slug}`,
+  };
 }
 
 export async function rebuildIndex(loomRoot: string): Promise<string> {

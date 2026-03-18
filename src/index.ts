@@ -15,6 +15,7 @@ import {
   readKnowledge,
   rebuildIndex,
   reflect,
+  deprecateEntry,
 } from "./weaver.js";
 import { GitManager } from "./git-manager.js";
 
@@ -84,25 +85,32 @@ server.tool(
       .describe(
         "Optional tags for categorization and retrieval (e.g. ['backend', 'database', 'auth'])",
       ),
+    mode: z
+      .enum(["replace", "append", "section"])
+      .optional()
+      .describe(
+        "Write mode: 'replace' overwrites the entire entry (default); 'append' adds new content below existing content with a date separator; 'section' replaces a matching ## heading or appends as a new section",
+      ),
   },
-  async ({ category, title, content, tags }) => {
+  async ({ category, title, content, tags, mode }) => {
     const config = await loadConfig(WORK_DIR);
     const loomRoot = resolveLoomPath(WORK_DIR, config);
     await ensureLoomStructure(loomRoot);
 
-    const { filePath, isUpdate } = await weave(loomRoot, {
+    const result = await weave(loomRoot, {
       title,
       category,
       content,
       tags,
+      mode,
     });
 
     await rebuildIndex(loomRoot);
 
     const git = new GitManager(WORK_DIR, config);
-    const action = isUpdate ? "update" : "add";
+    const action = result.isUpdate ? "update" : "add";
     const commitResult = await git.commitChanges(
-      [filePath, `${loomRoot}/index.md`],
+      [result.filePath, `${loomRoot}/index.md`],
       `${action} ${category}/${title}`,
     );
 
@@ -117,8 +125,9 @@ server.tool(
         {
           type: "text",
           text: [
-            `${isUpdate ? "Updated" : "Created"}: ${category}/${title}`,
-            `File: ${filePath}`,
+            `${result.isUpdate ? "Updated" : "Created"}: ${category}/${title}`,
+            `Mode: ${result.mode}`,
+            `File: ${result.filePath}`,
             `Tags: ${tags?.join(", ") ?? "none"}`,
             `Git: ${commitResult.message}${pushMsg}`,
             `Index rebuilt.`,
@@ -296,6 +305,73 @@ server.tool(
   },
 );
 
+// ─── Tool: loom_deprecate ─────────────────────────────────────
+server.tool(
+  "loom_deprecate",
+  "Mark a knowledge entry as deprecated. Use this when information is outdated, superseded by a newer entry, or no longer accurate. The entry is preserved but clearly marked.",
+  {
+    category: z.enum(["concepts", "decisions", "threads"]),
+    slug: z
+      .string()
+      .describe(
+        "The slug (filename without .md) of the entry to deprecate",
+      ),
+    reason: z
+      .string()
+      .describe(
+        "Why this entry is being deprecated (e.g. 'Replaced by new auth flow', 'No longer relevant after migration')",
+      ),
+    superseded_by: z
+      .string()
+      .optional()
+      .describe(
+        "Optional path to the replacement entry (e.g. 'concepts/new-auth-flow')",
+      ),
+  },
+  async ({ category, slug, reason, superseded_by }) => {
+    const config = await loadConfig(WORK_DIR);
+    const loomRoot = resolveLoomPath(WORK_DIR, config);
+
+    const result = await deprecateEntry(
+      loomRoot,
+      category,
+      slug,
+      reason,
+      superseded_by,
+    );
+
+    if (!result.success) {
+      return {
+        content: [{ type: "text", text: result.message }],
+      };
+    }
+
+    await rebuildIndex(loomRoot);
+
+    const git = new GitManager(WORK_DIR, config);
+    const commitResult = await git.commitChanges(
+      [result.filePath, `${loomRoot}/index.md`],
+      `deprecate ${category}/${slug}`,
+    );
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: [
+            result.message,
+            `Reason: ${reason}`,
+            superseded_by ? `Superseded by: ${superseded_by}` : "",
+            `Git: ${commitResult.message}`,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        },
+      ],
+    };
+  },
+);
+
 // ─── Tool: loom_reflect ───────────────────────────────────────
 server.tool(
   "loom_reflect",
@@ -402,6 +478,66 @@ server.resource("loom-index", "loom://index", async (uri) => {
     };
   }
 });
+
+// ─── Prompt: loom-instructions ─────────────────────────────────
+server.prompt(
+  "loom-instructions",
+  "System instructions that teach the AI how and when to use Loom tools proactively during conversations.",
+  async () => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `You have access to a knowledge management system called Loom. Follow these guidelines:
+
+## When to WRITE (loom_weave)
+
+Proactively call loom_weave when any of the following happen during our conversation:
+- A system architecture or module boundary is defined or clarified
+- A technical decision is made (and why)
+- Business logic or domain rules are explained
+- A non-obvious constraint or trade-off is identified
+- A bug root cause is found and the fix approach is decided
+- A feature design is finalized after discussion
+
+Use categories:
+- "concepts" for architecture, modules, business logic, terminology
+- "decisions" for ADR-style "why we chose X over Y" records
+- "threads" for conversation summaries, meeting notes, discussion digests
+
+Use mode:
+- "replace" for new entries or full rewrites
+- "append" to add new findings to an existing topic without losing previous content
+- "section" to update a specific ## heading within an existing entry
+
+## When to READ (loom_trace / loom_read)
+
+- Before answering questions about the system, check if Loom already has relevant knowledge
+- Before making architectural suggestions, trace existing decisions to avoid contradictions
+- When the user asks "what do we know about X", always check Loom first
+
+## When to REFLECT (loom_reflect)
+
+- When the user asks for a knowledge base health check
+- Periodically after many weave operations to check for conflicts
+
+## When to DEPRECATE (loom_deprecate)
+
+- When new knowledge explicitly supersedes an older entry
+- When a previous decision is reversed
+
+## General Rules
+
+- Always include meaningful tags for better retrieval
+- Keep entries focused: one topic per entry
+- Prefer structured Markdown with ## headings
+- For threads: summarize key points, don't dump raw conversation`,
+        },
+      },
+    ],
+  }),
+);
 
 // ─── Boot ─────────────────────────────────────────────────────
 async function main() {

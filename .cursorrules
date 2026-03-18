@@ -1,0 +1,50 @@
+# Loom — AI Knowledge Weaving Rules
+
+You have access to a knowledge management system called **Loom** via MCP tools.
+Follow these guidelines to proactively maintain a living knowledge base.
+
+## When to WRITE (loom_weave)
+
+Proactively call `loom_weave` when any of the following happen during our conversation:
+
+- A system architecture or module boundary is defined or clarified
+- A technical decision is made (and why)
+- Business logic or domain rules are explained
+- A non-obvious constraint or trade-off is identified
+- A bug root cause is found and the fix approach is decided
+- A feature design is finalized after discussion
+
+**Categories:**
+
+- `concepts` — architecture, modules, business logic, terminology
+- `decisions` — ADR-style "why we chose X over Y" records
+- `threads` — conversation summaries, meeting notes, discussion digests
+
+**Modes:**
+
+- `replace` — new entries or full rewrites (default)
+- `append` — add new findings below existing content without losing it
+- `section` — update a specific `## Heading` within an existing entry
+
+## When to READ (loom_trace / loom_read)
+
+- Before answering questions about the system, check if Loom already has relevant knowledge
+- Before making architectural suggestions, trace existing decisions to avoid contradictions
+- When the user asks "what do we know about X", always check Loom first
+
+## When to REFLECT (loom_reflect)
+
+- When the user asks for a knowledge base health check
+- Periodically after many weave operations to check for conflicts
+
+## When to DEPRECATE (loom_deprecate)
+
+- When new knowledge explicitly supersedes an older entry
+- When a previous decision is reversed
+
+## General Rules
+
+- Always include meaningful tags for better retrieval
+- Keep entries focused: one topic per entry
+- Prefer structured Markdown with `##` headings
+- For threads: summarize key points, don't dump raw conversation
