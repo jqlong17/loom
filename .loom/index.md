@@ -1,6 +1,6 @@
 ---
-updated: 2026-03-18T14:53:24.154Z
-total_entries: 5
+updated: 2026-03-18T14:53:32.764Z
+total_entries: 6
 ---
 
 # Loom System Index
@@ -9,6 +9,7 @@ total_entries: 5
 
 ## Concepts
 
+- [Knowledge Categories Design](concepts/knowledge-categories-design.md) — tags: architecture, categories, knowledge-model — updated: 2026-03-18T14:53:32.763Z
 - [Loom Vision and Core Design](concepts/loom-vision-and-core-design.md) — tags: vision, architecture, foundation, core — updated: 2026-03-18T14:52:46.658Z
 - [Three-Layer Architecture](concepts/three-layer-architecture.md) — tags: architecture, design, modules, core — updated: 2026-03-18T14:53:24.152Z
 
