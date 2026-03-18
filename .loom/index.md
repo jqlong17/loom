@@ -1,6 +1,6 @@
 ---
-updated: 2026-03-18T14:53:43.809Z
-total_entries: 7
+updated: 2026-03-18T14:53:57.035Z
+total_entries: 8
 ---
 
 # Loom System Index
@@ -22,4 +22,4 @@ total_entries: 7
 
 ## Threads
 
-_No entries yet._
+- [Founding Conversation Summary](threads/founding-conversation-summary.md) — tags: founding, history, milestone, conversation — updated: 2026-03-18T14:53:57.033Z
