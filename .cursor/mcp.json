@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "loom": {
+      "command": "node",
+      "args": [
+        "/Users/ruska/project/loom/dist/index.js"
+      ],
+      "env": {
+        "LOOM_WORK_DIR": "/Users/ruska/project/loom"
+      }
+    }
+  }
+}

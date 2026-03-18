@@ -11,7 +11,7 @@ Every time you discuss architecture, debug a tricky issue, or explore a new feat
 Loom captures that knowledge automatically:
 
 - **Conversations become documentation** — AI calls `loom_weave` to persist insights as Markdown
-- **Zero extra cost** — Loom uses your editor's AI (Cursor, VS Code Copilot), no separate API key
+- **Zero extra cost** — Loom uses your editor's AI (Cursor, VS Code Copilot, Claude Code, OpenCode, Codex), no separate API key
 - **Git-native** — Every knowledge update is a commit; team members share a living knowledge base
 - **Human-readable** — Plain Markdown files you can browse, edit, and review like any code
 
@@ -26,9 +26,14 @@ npm install
 npm run build
 ```
 
-### 2. Configure Your Editor
+### 2. Configure Your AI Tool
 
-**Cursor** — Add to `.cursor/mcp.json`:
+Replace the paths below with your actual paths.
+
+<details>
+<summary><b>Cursor</b></summary>
+
+Add to `.cursor/mcp.json` in your project root:
 
 ```json
 {
@@ -44,7 +49,12 @@ npm run build
 }
 ```
 
-**VS Code (Copilot)** — Add to `settings.json`:
+</details>
+
+<details>
+<summary><b>VS Code (Copilot)</b></summary>
+
+Add to `settings.json`:
 
 ```json
 {
@@ -59,6 +69,87 @@ npm run build
   }
 }
 ```
+
+</details>
+
+<details>
+<summary><b>Claude Code</b></summary>
+
+Register with a single command:
+
+```bash
+claude mcp add --transport stdio --scope user \
+  --env LOOM_WORK_DIR=/your/project/root \
+  loom -- node /absolute/path/to/loom/dist/index.js
+```
+
+Or manually edit `~/.claude.json` or `.mcp.json` at project root:
+
+```json
+{
+  "mcpServers": {
+    "loom": {
+      "command": "node",
+      "args": ["/absolute/path/to/loom/dist/index.js"],
+      "env": {
+        "LOOM_WORK_DIR": "/your/project/root"
+      }
+    }
+  }
+}
+```
+
+Scopes: `--scope local` (current project), `--scope project` (team-shared, commit to git), `--scope user` (all projects).
+
+</details>
+
+<details>
+<summary><b>OpenCode</b></summary>
+
+Add to the `mcp` field in `opencode.json` at your project root:
+
+```json
+{
+  "mcp": {
+    "loom": {
+      "type": "local",
+      "command": ["node", "/absolute/path/to/loom/dist/index.js"],
+      "enabled": true,
+      "environment": {
+        "LOOM_WORK_DIR": "/your/project/root"
+      }
+    }
+  }
+}
+```
+
+Or add to global config at `~/.config/opencode/opencode.json` to enable for all projects.
+
+</details>
+
+<details>
+<summary><b>Codex CLI (OpenAI)</b></summary>
+
+Register interactively:
+
+```bash
+codex mcp add loom
+```
+
+Select `STDIO` type, enter command `node /absolute/path/to/loom/dist/index.js`, and set env `LOOM_WORK_DIR=/your/project/root`.
+
+Or edit `~/.codex/config.toml` directly:
+
+```toml
+[mcp_servers.loom]
+type = "stdio"
+command = ["node", "/absolute/path/to/loom/dist/index.js"]
+
+[mcp_servers.loom.environment]
+LOOM_WORK_DIR = "/your/project/root"
+```
+
+</details>
 
 ### 3. Use
 
@@ -81,6 +172,7 @@ Once configured, Loom tools are available in your AI chat:
 | `loom_list` | List all entries in the knowledge base |
 | `loom_sync` | Pull + push with the remote Git repository |
 | `loom_log` | Show Git history of knowledge changes |
+| `loom_reflect` | Run a self-audit for conflicts, stale entries, missing tags, and merge candidates |
 
 ## Knowledge Categories
 

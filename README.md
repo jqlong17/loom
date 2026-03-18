@@ -13,7 +13,7 @@ Loom 是一个 MCP（Model Context Protocol）服务器，用来把你和 AI 的
 Loom 会把这些知识自动留下来：
 
 - **对话即文档**：AI 调用 `loom_weave` 将结论写入 Markdown
-- **零额外模型成本**：直接使用 Cursor / VS Code Copilot 等宿主 AI 能力
+- **零额外模型成本**：直接使用 Cursor / VS Code Copilot / Claude Code / OpenCode / Codex 等宿主 AI 能力
 - **Git 原生**：每次知识更新都可追踪，支持多人协作维护
 - **人类可读可改**：纯 Markdown 文件，和代码一样可审查、可编辑
 
@@ -28,9 +28,14 @@ npm install
 npm run build
 ```
 
-### 2. 配置编辑器
+### 2. 配置 AI 工具
 
-**Cursor** — 在 `.cursor/mcp.json` 中添加：
+以下配置中的路径请替换为你的实际路径。
+
+<details>
+<summary><b>Cursor</b></summary>
+
+在项目根目录 `.cursor/mcp.json` 中添加：
 
 ```json
 {
@@ -46,7 +51,12 @@ npm run build
 }
 ```
 
-**VS Code（Copilot）** — 在 `settings.json` 中添加：
+</details>
+
+<details>
+<summary><b>VS Code（Copilot）</b></summary>
+
+在 `settings.json` 中添加：
 
 ```json
 {
@@ -61,6 +71,87 @@ npm run build
   }
 }
 ```
+
+</details>
+
+<details>
+<summary><b>Claude Code</b></summary>
+
+使用 `claude mcp add` 命令一行注册：
+
+```bash
+claude mcp add --transport stdio --scope user \
+  --env LOOM_WORK_DIR=/your/project/root \
+  loom -- node /absolute/path/to/loom/dist/index.js
+```
+
+也可以手动编辑 `~/.claude.json` 或项目根目录的 `.mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "loom": {
+      "command": "node",
+      "args": ["/absolute/path/to/loom/dist/index.js"],
+      "env": {
+        "LOOM_WORK_DIR": "/your/project/root"
+      }
+    }
+  }
+}
+```
+
+scope 说明：`--scope local`（当前项目）、`--scope project`（团队共享，提交到 Git）、`--scope user`（全局所有项目）。
+
+</details>
+
+<details>
+<summary><b>OpenCode</b></summary>
+
+在项目根目录 `opencode.json` 的 `mcp` 字段中添加：
+
+```json
+{
+  "mcp": {
+    "loom": {
+      "type": "local",
+      "command": ["node", "/absolute/path/to/loom/dist/index.js"],
+      "enabled": true,
+      "environment": {
+        "LOOM_WORK_DIR": "/your/project/root"
+      }
+    }
+  }
+}
+```
+
+也可以放到全局配置 `~/.config/opencode/opencode.json` 中，对所有项目生效。
+
+</details>
+
+<details>
+<summary><b>Codex CLI（OpenAI）</b></summary>
+
+使用 `codex mcp add` 交互式注册：
+
+```bash
+codex mcp add loom
+```
+
+按提示选择 `STDIO` 类型，输入命令 `node /absolute/path/to/loom/dist/index.js`，环境变量设置 `LOOM_WORK_DIR=/your/project/root`。
+
+也可以直接编辑 `~/.codex/config.toml`：
+
+```toml
+[mcp_servers.loom]
+type = "stdio"
+command = ["node", "/absolute/path/to/loom/dist/index.js"]
+
+[mcp_servers.loom.environment]
+LOOM_WORK_DIR = "/your/project/root"
+```
+
+</details>
 
 ### 3. 开始使用
 
@@ -83,6 +174,7 @@ npm run build
 | `loom_list` | 列出知识库中的所有条目 |
 | `loom_sync` | 与远程 Git 仓库执行 pull + push 同步 |
 | `loom_log` | 查看知识变更的 Git 历史 |
+| `loom_reflect` | 执行知识库自检，输出冲突、过期、缺少标签、可合并项 |
 
 ## 知识分类
 

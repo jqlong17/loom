@@ -14,6 +14,7 @@ import {
   listAll,
   readKnowledge,
   rebuildIndex,
+  reflect,
 } from "./weaver.js";
 import { GitManager } from "./git-manager.js";
 
@@ -292,6 +293,84 @@ server.tool(
 
     const log = await git.log(limit ?? 10);
     return { content: [{ type: "text", text: `Loom Git History:\n\n${log}` }] };
+  },
+);
+
+// ─── Tool: loom_reflect ───────────────────────────────────────
+server.tool(
+  "loom_reflect",
+  "Run a self-reflection audit on Loom knowledge base to detect potential conflicts, stale entries, missing tags, and merge opportunities.",
+  {
+    staleDays: z
+      .number()
+      .optional()
+      .describe("Entries not updated for this many days are considered stale (default: 30)"),
+    includeThreads: z
+      .boolean()
+      .optional()
+      .describe("Whether to include threads category in reflection scan (default: true)"),
+    maxFindings: z
+      .number()
+      .optional()
+      .describe("Maximum number of findings to return (default: 20)"),
+  },
+  async ({ staleDays, includeThreads, maxFindings }) => {
+    const config = await loadConfig(WORK_DIR);
+    const loomRoot = resolveLoomPath(WORK_DIR, config);
+    await ensureLoomStructure(loomRoot);
+
+    const report = await reflect(loomRoot, {
+      staleDays: staleDays ?? 30,
+      includeThreads: includeThreads ?? true,
+      maxFindings: maxFindings ?? 20,
+    });
+
+    if (report.issues.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: [
+              `Reflection completed at ${report.generatedAt}`,
+              `Scanned entries: ${report.scannedEntries}`,
+              "No issues detected. Knowledge base looks healthy.",
+            ].join("\n"),
+          },
+        ],
+      };
+    }
+
+    const grouped: Record<string, typeof report.issues> = {};
+    for (const issue of report.issues) {
+      (grouped[issue.type] ??= []).push(issue);
+    }
+
+    const sections = Object.entries(grouped)
+      .map(([type, issues]) => {
+        const rows = issues
+          .map((issue, idx) => {
+            const files = issue.files.map((f) => `    - ${f}`).join("\n");
+            return `${idx + 1}. ${issue.reason}\n${files}`;
+          })
+          .join("\n");
+        return `## ${type}\n${rows}`;
+      })
+      .join("\n\n");
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: [
+            `Reflection completed at ${report.generatedAt}`,
+            `Scanned entries: ${report.scannedEntries}`,
+            `Findings: ${report.issues.length}`,
+            "",
+            sections,
+          ].join("\n"),
+        },
+      ],
+    };
   },
 );
 
