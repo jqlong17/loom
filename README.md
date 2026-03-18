@@ -271,6 +271,22 @@ npm run build
   - 写入一条 `loom_weave` 总结
   - 自动更新 `CHANGELOG.md`（按当天聚合）
 
+### 4.1 分层渐进披露（推荐读取策略）
+
+建议所有 AI 在回答前按以下顺序读取 Loom 记忆：
+
+1. 先调用 `loom_index`（读取全局知识地图 + 必读集合）
+2. 必读集合默认包含：
+   - 最近 5 条记忆（不排除 threads）
+   - 所有 `core` 标签的 concepts
+3. 再调用 `loom_trace`（基于问题检索候选条目）
+4. 仅在必要时调用 `loom_read`（读取少量高相关条目的全文）
+
+说明：
+- `loom_index` 输出的是“截断摘要”（短期记忆有效 + 控制上下文长度）
+- 当摘要不足以支撑回答时，再按需扩读全文
+- `loom_weave` 支持 `is_core=true`，可强制给基础概念加 `core` 标签
+
 ## 工具列表
 
 | Tool | 说明 |
@@ -279,6 +295,7 @@ npm run build
 | `loom_weave` | 写入知识条目（概念 / 决策 / 线程） |
 | `loom_trace` | 按关键词检索知识库 |
 | `loom_read` | 读取指定条目的完整内容 |
+| `loom_index` | 读取全局索引（分层披露第一步） |
 | `loom_list` | 列出知识库中的所有条目 |
 | `loom_sync` | 与远程 Git 仓库执行 pull + push 同步 |
 | `loom_log` | 查看知识变更的 Git 历史 |

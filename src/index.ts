@@ -14,6 +14,8 @@ import {
   weave,
   trace,
   listAll,
+  listRecentEntries,
+  listCoreConcepts,
   readKnowledge,
   rebuildIndex,
   reflect,
@@ -38,6 +40,12 @@ async function getRuntimeContext() {
     cachedLoomRoot = resolveLoomPath(WORK_DIR, cachedConfig);
   }
   return { config: cachedConfig, loomRoot: cachedLoomRoot };
+}
+
+function truncateText(text: string, maxChars: number): string {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= maxChars) return cleaned;
+  return `${cleaned.slice(0, maxChars)}...`;
 }
 
 const server = new McpServer({
@@ -103,6 +111,12 @@ server.tool(
       .describe(
         "Optional tags for categorization and retrieval (e.g. ['backend', 'database', 'auth'])",
       ),
+    is_core: z
+      .boolean()
+      .optional()
+      .describe(
+        "If true, force-add 'core' tag for foundational concepts that should be mandatory read.",
+      ),
     mode: z
       .enum(["replace", "append", "section"])
       .optional()
@@ -110,15 +124,23 @@ server.tool(
         "Write mode: 'replace' overwrites the entire entry (default); 'append' adds new content below existing content with a date separator; 'section' replaces a matching ## heading or appends as a new section",
       ),
   },
-  async ({ category, title, content, tags, mode }) => {
+  async ({ category, title, content, tags, mode, is_core }) => {
     const { config, loomRoot } = await getRuntimeContext();
     await ensureLoomStructure(loomRoot);
+
+    const normalizedTags = Array.from(new Set([...(tags ?? [])]));
+    const shouldAutoCore =
+      category === "concepts" &&
+      /core|核心|foundation|vision|architecture|原则|baseline/i.test(title);
+    if ((is_core || shouldAutoCore) && !normalizedTags.includes("core")) {
+      normalizedTags.push("core");
+    }
 
     const result = await weave(loomRoot, {
       title,
       category,
       content,
-      tags,
+      tags: normalizedTags,
       mode,
     });
 
@@ -145,7 +167,7 @@ server.tool(
             `${result.isUpdate ? "Updated" : "Created"}: ${category}/${title}`,
             `Mode: ${result.mode}`,
             `File: ${result.filePath}`,
-            `Tags: ${tags?.join(", ") ?? "none"}`,
+            `Tags: ${normalizedTags.join(", ") || "none"}`,
             `Git: ${commitResult.message}${pushMsg}`,
             `Index rebuilt.`,
           ].join("\n"),
@@ -204,6 +226,60 @@ server.tool(
         {
           type: "text",
           text: `Found ${results.length} result(s) for "${query}":\n\n${formatted}`,
+        },
+      ],
+    };
+  },
+);
+
+// ─── Tool: loom_index ─────────────────────────────────────────
+server.tool(
+  "loom_index",
+  "Read the Loom index and mandatory-read memory set first. Progressive disclosure order: index -> trace -> read.",
+  {},
+  async () => {
+    const { loomRoot } = await getRuntimeContext();
+    await ensureLoomStructure(loomRoot);
+    const RECENT_LIMIT = 5;
+    const SNIPPET_LIMIT = 220;
+    const index = await rebuildIndex(loomRoot);
+    const recent = await listRecentEntries(loomRoot, RECENT_LIMIT);
+    const coreConcepts = await listCoreConcepts(loomRoot);
+
+    const coreSection =
+      coreConcepts.length === 0
+        ? "- _No core-tagged concepts found yet._"
+        : coreConcepts
+            .map(
+              (c) =>
+                `- ${c.title} (${c.filePath})\n  摘要: ${truncateText(c.snippet, SNIPPET_LIMIT)}`,
+            )
+            .join("\n");
+    const recentSection = recent
+      .map(
+        (r) =>
+          `- ${r.title} [${r.category}] (${r.filePath})\n  摘要: ${truncateText(r.snippet, SNIPPET_LIMIT)}`,
+      )
+      .join("\n");
+
+    const briefing = [
+      "## Mandatory Read Set",
+      "",
+      "### Core Concepts (tag: core)",
+      coreSection,
+      "",
+      `### Recent Memory (latest ${RECENT_LIMIT} entries)`,
+      recentSection,
+      "",
+      "### Full Index",
+      index,
+    ].join("\n");
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: briefing,
         },
       ],
     };
@@ -627,9 +703,19 @@ Use mode:
 
 ## When to READ (loom_trace / loom_read)
 
+- Always start with loom_index to get the high-level map first
+- Treat mandatory set as required context:
+  - Recent memory: latest 5 entries (do not skip categories)
+  - Core concepts: concepts tagged with "core"
+- Mandatory-read snippets are intentionally truncated; only expand with loom_read when needed
 - Before answering questions about the system, check if Loom already has relevant knowledge
 - Before making architectural suggestions, trace existing decisions to avoid contradictions
 - When the user asks "what do we know about X", always check Loom first
+- Use progressive disclosure:
+  1) loom_index for global map + mandatory read set
+  2) loom_trace for candidate entries
+  3) loom_read only for top relevant entries
+  4) read full files only when summary is insufficient
 
 ## When to REFLECT (loom_reflect)
 
@@ -644,6 +730,7 @@ Use mode:
 ## General Rules
 
 - Always include meaningful tags for better retrieval
+- For foundational concepts, include "core" tag (or set is_core=true)
 - Keep entries focused: one topic per entry
 - Prefer structured Markdown with ## headings
 - For threads: summarize key points, don't dump raw conversation`,

@@ -218,8 +218,9 @@ export async function trace(
 function extractSnippet(content: string, query: string): string {
   const bodyStart = content.indexOf("---", 4);
   const body = bodyStart > 0 ? content.slice(bodyStart + 3) : content;
+  const normalizedQuery = query.toLowerCase().trim();
 
-  const idx = body.toLowerCase().indexOf(query);
+  const idx = body.toLowerCase().indexOf(normalizedQuery);
   if (idx < 0) return body.slice(0, 200).trim();
 
   const start = Math.max(0, idx - 80);
@@ -281,7 +282,7 @@ export async function listAll(loomRoot: string): Promise<TraceResult[]> {
         title: titleMatch?.[1] ?? file.replace(".md", ""),
         category: cat,
         filePath: path.relative(loomRoot, filePath),
-        snippet: raw.slice(0, 200).trim(),
+        snippet: extractSnippet(raw, ""),
         tags: fm?.tags ?? "",
         updated: fm?.updated ?? "unknown",
       });
@@ -289,6 +290,31 @@ export async function listAll(loomRoot: string): Promise<TraceResult[]> {
   }
 
   return results;
+}
+
+function toTimestamp(updated: string): number {
+  const ts = Date.parse(updated);
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+export async function listRecentEntries(
+  loomRoot: string,
+  limit = 5,
+): Promise<TraceResult[]> {
+  const all = await listAll(loomRoot);
+  all.sort((a, b) => toTimestamp(b.updated) - toTimestamp(a.updated));
+  return all.slice(0, Math.max(1, limit));
+}
+
+export async function listCoreConcepts(loomRoot: string): Promise<TraceResult[]> {
+  const all = await listAll(loomRoot);
+  const core = all.filter(
+    (item) =>
+      item.category === "concepts" &&
+      parseTags(item.tags).some((t) => t.toLowerCase() === "core"),
+  );
+  core.sort((a, b) => toTimestamp(b.updated) - toTimestamp(a.updated));
+  return core;
 }
 
 function parseTags(tagsRaw: string): string[] {

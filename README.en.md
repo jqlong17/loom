@@ -265,6 +265,22 @@ Once configured, Loom tools are available in your AI chat:
   - `dryRun=true`: check upgrade readiness only
   - default: execute real `git pull` upgrade
 
+### 4.1 Progressive Disclosure (Recommended Read Strategy)
+
+Ask AI to read Loom memory in this order before answering:
+
+1. Call `loom_index` first (global map + mandatory set)
+2. Mandatory set includes:
+   - latest 5 memory entries (including threads)
+   - all concepts tagged `core`
+3. Call `loom_trace` for problem-specific candidate entries
+4. Call `loom_read` only when details are required
+
+Notes:
+- `loom_index` returns truncated snippets to keep short-term context efficient
+- Expand to full documents only when snippets are insufficient
+- `loom_weave` supports `is_core=true` to force core-tagging foundational concepts
+
 ## Tools
 
 | Tool | Description |
@@ -273,6 +289,7 @@ Once configured, Loom tools are available in your AI chat:
 | `loom_weave` | Write a knowledge entry (concept, decision, or thread) |
 | `loom_trace` | Search the knowledge base by keyword |
 | `loom_read` | Read the full content of a specific entry |
+| `loom_index` | Read global index + mandatory-read set (first step) |
 | `loom_list` | List all entries in the knowledge base |
 | `loom_sync` | Pull + push with the remote Git repository |
 | `loom_log` | Show Git history of knowledge changes |
