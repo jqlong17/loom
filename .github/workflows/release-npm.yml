@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
@@ -41,5 +40,7 @@ jobs:
             exit 1
           fi
 
-      - name: Publish (Trusted Publishing)
-        run: npm publish --provenance --access public
+      - name: Publish (NPM token fallback)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
