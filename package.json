@@ -1,6 +1,6 @@
 {
   "name": "loom-memory",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Weaving ephemeral AI chats into a persistent system mind — an MCP server that turns conversations into structured Markdown knowledge.",
   "type": "module",
   "main": "dist/index.js",
