@@ -37,9 +37,15 @@ import {
 import { lintMemoryEntry, formatLintIssues } from "./memory-lint.js";
 import { executeIngestKnowledge } from "./app/usecases/ingest-knowledge.js";
 import { executeRunDoctor } from "./app/usecases/run-doctor.js";
+import { executeStartProbeSession } from "./app/usecases/start-probe-session.js";
+import { executeCommitProbeSession } from "./app/usecases/commit-probe-session.js";
+import { executeUpdateChangelog } from "./app/usecases/update-changelog.js";
+import { executeMetricsSnapshot } from "./app/usecases/metrics-snapshot.js";
+import { formatDoctorForMcp } from "./adapters/doctor-adapter.js";
 
 const WORK_DIR = process.env.LOOM_WORK_DIR ?? process.cwd();
 const SERVER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const SERVER_VERSION = "0.1.0";
 
 let cachedConfig: Awaited<ReturnType<typeof loadConfig>> | undefined;
 let cachedLoomRoot: string | undefined;
@@ -300,7 +306,7 @@ function makeProbeThreadContent(
 
 const server = new McpServer({
   name: "loom",
-  version: "0.1.0",
+  version: SERVER_VERSION,
 });
 
 // ─── Tool: loom_init ──────────────────────────────────────────
@@ -582,7 +588,7 @@ server.tool(
       content: [
         {
           type: "text",
-          text: JSON.stringify({ ok: !report.data.shouldFail, ...report.data }, null, 2),
+          text: formatDoctorForMcp(report),
         },
       ],
     };
@@ -719,13 +725,24 @@ server.tool(
     const { loomRoot } = await getRuntimeContext();
     await ensureLoomStructure(loomRoot);
     const maxQ = Math.min(5, Math.max(1, max_questions ?? 3));
-    const { session, evidence } = await startProbeSession(loomRoot, context, goal, maxQ);
+    const started = await executeStartProbeSession({
+      loomRoot,
+      command: { context, goal, maxQuestions: maxQ },
+    });
+    if (!started.ok || !started.data) {
+      return {
+        content: [{ type: "text", text: "Failed to start probe session." }],
+      };
+    }
+    const evidenceMap = new Map(
+      started.data.evidence.entries.map((e) => [e.filePath, e.summary]),
+    );
     const text = makeProbeStartText({
-      sessionId: session.id,
-      questions: session.questions,
-      evidenceMap: evidence.evidenceMap,
-      coreConceptCount: evidence.coreConceptCount,
-      recentCount: evidence.recentCount,
+      sessionId: started.data.sessionId,
+      questions: started.data.questions,
+      evidenceMap,
+      coreConceptCount: started.data.evidence.coreConceptCount,
+      recentCount: started.data.evidence.recentCount,
     });
     return { content: [{ type: "text", text }] };
   },
@@ -759,69 +776,35 @@ server.tool(
   async ({ session_id, answers, title, tags, commit }) => {
     const { config, loomRoot } = await getRuntimeContext();
     await ensureLoomStructure(loomRoot);
-
-    let committed: Awaited<ReturnType<typeof commitProbeSession>>;
-    try {
-      committed = await commitProbeSession(loomRoot, session_id, answers);
-    } catch (err) {
-      return {
-        content: [
-          { type: "text", text: `Probe commit failed: ${(err as Error).message}` },
-        ],
-      };
-    }
-
-    const entryTitle = title?.trim() || `probe-session-${session_id}`;
-    const normalizedTags = Array.from(
-      new Set(["active-inquiry", "qa-capture", "memory", ...(tags ?? [])]),
-    );
-    const contentMd = makeProbeThreadContent(committed.session, committed.matched);
-
-    const lint = lintMemoryEntry({
-      title: entryTitle,
-      category: "threads",
-      content: contentMd,
-      tags: normalizedTags,
+    const git = new GitManager(WORK_DIR, config);
+    const committed = await executeCommitProbeSession({
+      loomRoot,
+      git,
+      command: {
+        sessionId: session_id,
+        answers,
+        title,
+        tags,
+        commit: commit ?? true,
+      },
     });
-    if (!lint.ok) {
+    if (!committed.ok || !committed.data) {
       return {
         content: [
           {
             type: "text",
-            text: `${formatLintIssues(lint)}\nProbe session was committed, but memory write aborted due to lint errors.`,
+            text: committed.issues.map((i) => i.suggestion ?? i.message).join("\n"),
           },
         ],
       };
     }
-
-    const result = await weave(loomRoot, {
-      category: "threads",
-      title: entryTitle,
-      content: contentMd,
-      tags: normalizedTags,
-      mode: "append",
-    });
-    await rebuildIndex(loomRoot);
-
     const lines = [
-      `Captured Q&A to: threads/${entryTitle}`,
-      `Session: ${session_id}`,
-      `File: ${result.filePath}`,
-      `Matched answers: ${committed.matched.length}`,
-      `Unmatched answers: ${committed.unmatched.length}`,
-      `Tags: ${normalizedTags.join(", ")}`,
-      lint.issues.length > 0 ? formatLintIssues(lint) : "",
-    ].filter(Boolean);
-
-    if (commit ?? true) {
-      const git = new GitManager(WORK_DIR, config);
-      const commitResult = await git.commitChanges(
-        [result.filePath, `${loomRoot}/index.md`, `${loomRoot}/probes/${session_id}.json`],
-        `capture inquiry ${entryTitle}`,
-      );
-      lines.push(`Git: ${commitResult.message}`);
-    }
-
+      `Captured Q&A to file: ${committed.data.filePath}`,
+      `Session: ${committed.data.sessionId}`,
+      `Matched answers: ${committed.data.matchedAnswers}`,
+      `Unmatched answers: ${committed.data.unmatchedAnswers}`,
+      `Git: ${committed.data.git ?? "skipped"}`,
+    ];
     return { content: [{ type: "text", text: lines.join("\n") }] };
   },
 );
@@ -864,22 +847,28 @@ server.tool(
           content: [{ type: "text", text: "loom_probe requires context when record=false." }],
         };
       }
-      const { session, evidence } = await startProbeSession(
+      const started = await executeStartProbeSession({
         loomRoot,
-        context,
-        goal,
-        maxQ,
+        command: { context, goal, maxQuestions: maxQ },
+      });
+      if (!started.ok || !started.data) {
+        return {
+          content: [{ type: "text", text: "Failed to start probe session." }],
+        };
+      }
+      const evidenceMap = new Map(
+        started.data.evidence.entries.map((e) => [e.filePath, e.summary]),
       );
       return {
         content: [
           {
             type: "text",
             text: makeProbeStartText({
-              sessionId: session.id,
-              questions: session.questions,
-              evidenceMap: evidence.evidenceMap,
-              coreConceptCount: evidence.coreConceptCount,
-              recentCount: evidence.recentCount,
+              sessionId: started.data.sessionId,
+              questions: started.data.questions,
+              evidenceMap,
+              coreConceptCount: started.data.evidence.coreConceptCount,
+              recentCount: started.data.evidence.recentCount,
             }),
           },
         ],
@@ -893,89 +882,46 @@ server.tool(
       };
     }
 
-    let effectiveSessionId = session_id;
-    if (!effectiveSessionId) {
-      if (!context?.trim()) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "record=true without session_id requires context to auto-create a session.",
-            },
-          ],
-        };
-      }
-      const started = await startProbeSession(loomRoot, context, goal, maxQ);
-      effectiveSessionId = started.session.id;
-    }
-
-    let committed: Awaited<ReturnType<typeof commitProbeSession>>;
-    try {
-      committed = await commitProbeSession(
-        loomRoot,
-        effectiveSessionId,
-        answerList as ProbeAnswerInput[],
-      );
-    } catch (err) {
-      return {
-        content: [{ type: "text", text: `Probe commit failed: ${(err as Error).message}` }],
-      };
-    }
-
-    const entryTitle = title?.trim() || `probe-session-${effectiveSessionId}`;
-    const normalizedTags = Array.from(
-      new Set(["active-inquiry", "qa-capture", "memory", ...(tags ?? [])]),
-    );
-    const contentMd = makeProbeThreadContent(committed.session, committed.matched);
-    const lint = lintMemoryEntry({
-      title: entryTitle,
-      category: "threads",
-      content: contentMd,
-      tags: normalizedTags,
+    const git = new GitManager(WORK_DIR, config);
+    const committed = await executeCommitProbeSession({
+      loomRoot,
+      git,
+      command: {
+        sessionId: session_id,
+        context,
+        goal,
+        maxQuestions: maxQ,
+        answers: answerList as ProbeAnswerInput[],
+        title,
+        tags,
+        commit: commit ?? true,
+      },
     });
-    if (!lint.ok) {
+    if (!committed.ok || !committed.data) {
       return {
         content: [
           {
             type: "text",
-            text: `${formatLintIssues(lint)}\nProbe session was committed, but memory write aborted due to lint errors.`,
+            text: committed.issues.map((i) => i.suggestion ?? i.message).join("\n"),
           },
         ],
       };
     }
 
-    const result = await weave(loomRoot, {
-      category: "threads",
-      title: entryTitle,
-      content: contentMd,
-      tags: normalizedTags,
-      mode: "append",
-    });
-    await rebuildIndex(loomRoot);
-
-    const lines = [
-      `Captured Q&A to: threads/${entryTitle}`,
-      `Session: ${effectiveSessionId}`,
-      `File: ${result.filePath}`,
-      `Matched answers: ${committed.matched.length}`,
-      `Unmatched answers: ${committed.unmatched.length}`,
-      lint.issues.length > 0 ? formatLintIssues(lint) : "",
-    ].filter(Boolean);
-
-    if (commit ?? true) {
-      const git = new GitManager(WORK_DIR, config);
-      const commitResult = await git.commitChanges(
-        [
-          result.filePath,
-          `${loomRoot}/index.md`,
-          `${loomRoot}/probes/${effectiveSessionId}.json`,
-        ],
-        `capture inquiry ${entryTitle}`,
-      );
-      lines.push(`Git: ${commitResult.message}`);
-    }
-
-    return { content: [{ type: "text", text: lines.join("\n") }] };
+    return {
+      content: [
+        {
+          type: "text",
+          text: [
+            `Captured Q&A to file: ${committed.data.filePath}`,
+            `Session: ${committed.data.sessionId}`,
+            `Matched answers: ${committed.data.matchedAnswers}`,
+            `Unmatched answers: ${committed.data.unmatchedAnswers}`,
+            `Git: ${committed.data.git ?? "skipped"}`,
+          ].join("\n"),
+        },
+      ],
+    };
   },
 );
 
@@ -1124,46 +1070,102 @@ server.tool(
   },
   async ({ mode, date, highlights, commit }) => {
     const { config } = await getRuntimeContext();
-    const selectedMode = mode ?? "auto";
+    const { loomRoot } = await getRuntimeContext();
+    const git = new GitManager(WORK_DIR, config);
+    const output = await executeUpdateChangelog({
+      workDir: WORK_DIR,
+      loomRoot,
+      git,
+      command: {
+        mode: mode ?? "auto",
+        date,
+        highlights,
+        commit: commit ?? true,
+      },
+    });
 
-    const items =
-      selectedMode === "manual"
-        ? (highlights ?? [])
-        : await collectDailyHighlightsFromGit(WORK_DIR, date);
-
-    if (items.length === 0) {
+    if (!output.ok || !output.data) {
       return {
         content: [
           {
             type: "text",
-            text:
-              selectedMode === "manual"
-                ? "No highlights provided. Nothing written to CHANGELOG.md."
-                : "No core highlights inferred from git for that date.",
+            text: output.issues.map((i) => i.message).join("\n"),
           },
         ],
       };
     }
 
-    const result = await updateChangelog(WORK_DIR, items, date);
-    const lines = [
-      `Updated: ${result.filePath}`,
-      `Date: ${result.date}`,
-      `Added points: ${result.added}`,
-      `Total points for date: ${result.totalForDate}`,
-    ];
-
-    if (commit ?? true) {
-      const git = new GitManager(WORK_DIR, config);
-      const commitResult = await git.commitChanges(
-        [result.filePath],
-        `update changelog ${result.date}`,
-      );
-      lines.push(`Git: ${commitResult.message}`);
-    }
-
     return {
-      content: [{ type: "text", text: lines.join("\n") }],
+      content: [
+        {
+          type: "text",
+          text: [
+            `Updated: ${output.data.filePath}`,
+            `Date: ${output.data.date}`,
+            `Added points: ${output.data.added}`,
+            `Total points for date: ${output.data.totalForDate}`,
+            `Git: ${output.data.git ?? "skipped"}`,
+          ].join("\n"),
+        },
+      ],
+    };
+  },
+);
+
+// ─── Tool: loom_metrics_snapshot ───────────────────────────────
+server.tool(
+  "loom_metrics_snapshot",
+  "Generate metrics snapshot JSON for governance and auxiliary indicators.",
+  {
+    snapshot_date: z
+      .string()
+      .optional()
+      .describe("Date in YYYY-MM-DD. Defaults to today."),
+    stale_days: z.number().optional(),
+    include_threads: z.boolean().optional(),
+    max_findings: z.number().optional(),
+    fail_on: z.enum(["none", "error", "warn"]).optional(),
+  },
+  async ({
+    snapshot_date,
+    stale_days,
+    include_threads,
+    max_findings,
+    fail_on,
+  }) => {
+    const { loomRoot } = await getRuntimeContext();
+    await ensureLoomStructure(loomRoot);
+    const output = await executeMetricsSnapshot({
+      loomRoot,
+      command: {
+        snapshotDate: snapshot_date,
+        staleDays: stale_days ?? 30,
+        includeThreads: include_threads ?? true,
+        maxFindings: max_findings ?? 200,
+        failOn: fail_on ?? "none",
+      },
+    });
+    if (!output.ok || !output.data) {
+      return {
+        content: [{ type: "text", text: "Failed to generate metrics snapshot." }],
+      };
+    }
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              ok: true,
+              filePath: output.data.filePath,
+              snapshot: output.data.snapshot,
+              artifacts: output.artifacts,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
     };
   },
 );
@@ -1446,7 +1448,30 @@ Use mode:
 );
 
 // ─── Boot ─────────────────────────────────────────────────────
+function maybeHandleMetaArgs(): boolean {
+  const args = process.argv.slice(2);
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(`Loom MCP Server
+
+Usage:
+  loom                Start MCP stdio server
+  loom --help         Show this help
+  loom --version      Show version
+
+Notes:
+  - 'loom' is the MCP server binary and waits for stdio transport.
+  - For interactive commands, use 'loom-cli help'.`);
+    return true;
+  }
+  if (args.includes("--version") || args.includes("-v")) {
+    console.log(SERVER_VERSION);
+    return true;
+  }
+  return false;
+}
+
 async function main() {
+  if (maybeHandleMetaArgs()) return;
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

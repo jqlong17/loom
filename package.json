@@ -1,5 +1,5 @@
 {
-  "name": "loom-mcp",
+  "name": "loom-memory",
   "version": "0.1.0",
   "description": "Weaving ephemeral AI chats into a persistent system mind — an MCP server that turns conversations into structured Markdown knowledge.",
   "type": "module",
@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:regression": "bash -lc 'set -o pipefail; mkdir -p .test-logs; vitest run --coverage --reporter=verbose 2>&1 | tee .test-logs/latest.log'",
+    "prepublishOnly": "npm run build && npm run test",
     "changelog:auto": "tsx scripts/changelog-auto.ts",
     "cli": "node dist/cli.js",
     "hooks:install": "bash scripts/hooks-install.sh"
@@ -30,6 +31,13 @@
     "model-context-protocol"
   ],
   "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "README.en.md",
+    "CHANGELOG.md",
+    "INSTALL_POLICY.json"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "simple-git": "^3.27.0",

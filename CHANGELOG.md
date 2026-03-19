@@ -35,3 +35,4 @@
 - 新增 `contracts + usecases` 抽象层并将 CLI/MCP 接入统一用例返回协议，目的是让系统能力与入口解耦，便于后续扩展 HTTP/Daemon 等新适配层。
 - 新增 `docs/METRICS.md` 并将指标体系接入 roadmap/plan/readme，目的是让下一步架构演进具备统一的北极星衡量标准与周度复盘机制。
 - 在 roadmap 与 implementation plan 中新增“数据反馈闭环”执行主线（snapshot/report/event-mapping/PR 指标影响），目的是将量化指标从“观测”升级为“驱动决策”的工程机制。
+- 完成 `loom-memory@0.1.0` npm 首发并验证全局/本地安装路径，同时在 README 增加 npm 最短安装说明，目的是让 OpenCode 等用户可以一键安装并快速接入 Loom。

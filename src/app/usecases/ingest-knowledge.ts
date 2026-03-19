@@ -1,6 +1,7 @@
 import type { LoomConfig } from "../../config.js";
 import type { GitManager } from "../../git-manager.js";
 import { ingestKnowledge } from "../../core/loom-core.js";
+import { appendEvent } from "../../events.js";
 import {
   failResult,
   successResult,
@@ -37,11 +38,33 @@ export async function executeIngestKnowledge(params: {
     ]);
   }
 
-  return successResult({
-    ingest: output.ingest,
-    lintReport: output.lintReport,
-    lintIssues: output.lintIssues,
-    changelog: output.changelog,
-    git: output.git,
+  const eventFile = await appendEvent(params.loomRoot, {
+    type: "knowledge.ingested",
+    ts: new Date().toISOString(),
+    payload: {
+      category: params.command.category,
+      title: params.command.title,
+      filePath: output.ingest.filePath,
+      mode: output.ingest.mode,
+      isUpdate: output.ingest.isUpdate,
+    },
   });
+
+  const artifacts = [output.ingest.filePath, `${params.loomRoot}/index.md`, eventFile];
+  if (output.changelog && !("skipped" in output.changelog)) {
+    artifacts.push(output.changelog.file);
+  }
+
+  return successResult(
+    {
+      ingest: output.ingest,
+      lintReport: output.lintReport,
+      lintIssues: output.lintIssues,
+      changelog: output.changelog,
+      git: output.git,
+    },
+    [],
+    artifacts,
+    { shouldFail: false },
+  );
 }

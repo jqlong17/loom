@@ -1,5 +1,6 @@
 import type { LoomCategory } from "../config.js";
 import type { ReflectIssue } from "../weaver.js";
+import type { ProbeAnswerInput, ProbeQuestion } from "../probe.js";
 
 export interface IngestCommand {
   category: LoomCategory;
@@ -62,4 +63,85 @@ export interface DoctorOutcome {
     warnCount: number;
   };
   issues: DoctorIssue[];
+}
+
+export interface ProbeStartCommand {
+  context: string;
+  goal?: string;
+  maxQuestions: number;
+}
+
+export interface ProbeStartOutcome {
+  sessionId: string;
+  questions: ProbeQuestion[];
+  evidence: {
+    coreConceptCount: number;
+    recentCount: number;
+    entries: Array<{ filePath: string; summary: string }>;
+  };
+}
+
+export interface ProbeCommitCommand {
+  sessionId?: string;
+  context?: string;
+  goal?: string;
+  maxQuestions?: number;
+  answers: ProbeAnswerInput[];
+  title?: string;
+  tags?: string[];
+  commit?: boolean;
+}
+
+export interface ProbeCommitOutcome {
+  sessionId: string;
+  filePath: string;
+  matchedAnswers: number;
+  unmatchedAnswers: number;
+  git?: string;
+}
+
+export interface ChangelogCommand {
+  mode: "auto" | "manual";
+  date?: string;
+  highlights?: string[];
+  commit?: boolean;
+}
+
+export interface ChangelogOutcome {
+  filePath: string;
+  date: string;
+  added: number;
+  totalForDate: number;
+  git?: string;
+}
+
+export interface MetricsSnapshotCommand {
+  failOn: DoctorFailOn;
+  staleDays: number;
+  includeThreads: boolean;
+  maxFindings: number;
+  snapshotDate?: string;
+}
+
+export interface MetricsSnapshotOutcome {
+  filePath: string;
+  snapshot: {
+    schema: "metrics.snapshot.v1";
+    generatedAt: string;
+    metrics: {
+      governancePassRate: number;
+      danglingLinkCount: number;
+      isolatedNodeCount: number;
+      probeCompletionRate: number;
+    };
+    counts: {
+      totalEntries: number;
+      byCategory: Record<string, number>;
+      probeSessions: {
+        total: number;
+        committed: number;
+      };
+      events: Record<string, number>;
+    };
+  };
 }

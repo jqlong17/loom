@@ -17,6 +17,11 @@ import { updateChangelog, collectDailyHighlightsFromGit } from "./changelog.js";
 import { upgradeFromGit } from "./updater.js";
 import { executeIngestKnowledge } from "./app/usecases/ingest-knowledge.js";
 import { executeRunDoctor } from "./app/usecases/run-doctor.js";
+import { executeStartProbeSession } from "./app/usecases/start-probe-session.js";
+import { executeCommitProbeSession } from "./app/usecases/commit-probe-session.js";
+import { executeUpdateChangelog } from "./app/usecases/update-changelog.js";
+import { executeMetricsSnapshot } from "./app/usecases/metrics-snapshot.js";
+import { formatDoctorPayload } from "./adapters/doctor-adapter.js";
 
 type ArgMap = Record<string, string | boolean>;
 
@@ -81,6 +86,16 @@ function fail(message: string): never {
   throw new Error(message);
 }
 
+function parseJsonArg<T>(args: ArgMap, key: string): T | undefined {
+  const raw = asString(args, key);
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    fail(`invalid JSON for --${key}`);
+  }
+}
+
 function print(data: unknown, jsonMode: boolean): void {
   if (jsonMode) {
     console.log(JSON.stringify(data, null, 2));
@@ -104,6 +119,9 @@ Commands:
   weave --category <concepts|decisions|threads> --title <t> --content <text> [--tags a,b] [--links a,b] [--domain d] [--mode replace|append|section]
   ingest --category <concepts|decisions|threads> --title <t> --content <text> [--tags a,b] [--links a,b] [--domain d] [--mode replace|append|section] [--commit true|false] [--changelog true|false]
   doctor [--staleDays 30] [--includeThreads true|false] [--maxFindings 20] [--failOn none|error|warn]
+  probe-start --context <text> [--goal <text>] [--maxQuestions 3]
+  probe-commit [--sessionId <id>] [--context <text>] [--goal <text>] [--maxQuestions 3] --answers '<json-array>' [--title <t>] [--tags a,b] [--commit true|false]
+  metrics-snapshot [--snapshotDate YYYY-MM-DD] [--staleDays 30] [--includeThreads true|false] [--maxFindings 200] [--failOn none|error|warn]
   closeout --title <t> --content <text> [--category threads|concepts] [--tags a,b] [--mode append|replace|section]
   trace --query <text> [--category <c>] [--tags a,b] [--limit n]
   read --category <c> --slug <filename-without-md>
@@ -393,18 +411,100 @@ async function main(): Promise<void> {
       if (!report.ok || !report.data) {
         fail("doctor execution failed");
       }
+      const payload = formatDoctorPayload(report);
+      print(payload, jsonMode);
 
+      if (payload.shouldFail) {
+        process.exitCode = 2;
+      }
+      return;
+    }
+
+    case "probe-start": {
+      const context = asString(args, "context");
+      if (!context) fail("probe-start requires --context");
+      const output = await executeStartProbeSession({
+        loomRoot,
+        command: {
+          context,
+          goal: asString(args, "goal"),
+          maxQuestions: asNumber(args, "maxQuestions") ?? 3,
+        },
+      });
+      if (!output.ok || !output.data) {
+        fail(output.issues.map((i) => i.message).join("\n"));
+      }
       print(
         {
-          ok: !report.data.shouldFail,
-          ...report.data,
+          ok: true,
+          ...output.data,
+          artifacts: output.artifacts,
         },
         jsonMode,
       );
+      return;
+    }
 
-      if (report.data.shouldFail) {
-        process.exitCode = 2;
+    case "probe-commit": {
+      const answers = parseJsonArg<Array<{ question_id?: string; question?: string; answer: string }>>(
+        args,
+        "answers",
+      );
+      if (!answers?.length) fail("probe-commit requires --answers '<json-array>'");
+      const output = await executeCommitProbeSession({
+        loomRoot,
+        git,
+        command: {
+          sessionId: asString(args, "sessionId"),
+          context: asString(args, "context"),
+          goal: asString(args, "goal"),
+          maxQuestions: asNumber(args, "maxQuestions"),
+          answers,
+          title: asString(args, "title"),
+          tags: asList(args, "tags"),
+          commit: asBool(args, "commit", true) ?? true,
+        },
+      });
+      if (!output.ok || !output.data) {
+        fail(output.issues.map((i) => i.suggestion ?? i.message).join("\n"));
       }
+      print(
+        {
+          ok: true,
+          ...output.data,
+          artifacts: output.artifacts,
+        },
+        jsonMode,
+      );
+      return;
+    }
+
+    case "metrics-snapshot": {
+      const failOn = (asString(args, "failOn") ?? "none").toLowerCase();
+      if (!["none", "error", "warn"].includes(failOn)) {
+        fail("metrics-snapshot --failOn must be one of: none|error|warn");
+      }
+      const output = await executeMetricsSnapshot({
+        loomRoot,
+        command: {
+          failOn: failOn as "none" | "error" | "warn",
+          staleDays: asNumber(args, "staleDays") ?? 30,
+          includeThreads: asBool(args, "includeThreads", true) ?? true,
+          maxFindings: asNumber(args, "maxFindings") ?? 200,
+          snapshotDate: asString(args, "snapshotDate"),
+        },
+      });
+      if (!output.ok || !output.data) {
+        fail("metrics snapshot failed");
+      }
+      print(
+        {
+          ok: true,
+          ...output.data,
+          artifacts: output.artifacts,
+        },
+        jsonMode,
+      );
       return;
     }
 
@@ -422,28 +522,36 @@ async function main(): Promise<void> {
 
     case "changelog": {
       const mode = (asString(args, "mode") ?? "auto") as "auto" | "manual";
-      const date = asString(args, "date");
       const highlights =
         mode === "manual"
-          ? (asString(args, "highlights")
+          ? asString(args, "highlights")
               ?.split("|")
               .map((x) => x.trim())
-              .filter(Boolean) ?? [])
-          : await collectDailyHighlightsFromGit(WORK_DIR, date);
-      if (highlights.length === 0) {
-        print({ ok: true, message: "no highlights" }, jsonMode);
+              .filter(Boolean)
+          : undefined;
+      const output = await executeUpdateChangelog({
+        workDir: WORK_DIR,
+        loomRoot,
+        git,
+        command: {
+          mode,
+          date: asString(args, "date"),
+          highlights,
+          commit: asBool(args, "commit", true) ?? true,
+        },
+      });
+      if (!output.ok || !output.data) {
+        print(
+          {
+            ok: false,
+            issues: output.issues,
+            gate: output.gate,
+          },
+          jsonMode,
+        );
         return;
       }
-      const result = await updateChangelog(WORK_DIR, highlights, date);
-      let gitMsg: string | undefined;
-      if (asBool(args, "commit", true) ?? true) {
-        const commitResult = await git.commitChanges(
-          [result.filePath],
-          `update changelog ${result.date}`,
-        );
-        gitMsg = commitResult.message;
-      }
-      print({ ok: true, ...result, git: gitMsg }, jsonMode);
+      print({ ok: true, ...output.data, artifacts: output.artifacts }, jsonMode);
       return;
     }
 

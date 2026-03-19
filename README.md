@@ -6,6 +6,8 @@
 
 Loom 是一个 MCP（Model Context Protocol）服务器，用来把你和 AI 的对话沉淀为结构化、可版本管理的 Markdown 知识库。它本地运行，复用编辑器自带 AI（不需要额外 API Key），并可通过 Git 实现团队协作。
 
+> npm 包名：`loom-memory`（产品名仍为 Loom）。
+
 ## 为什么是 Loom？
 
 你每次与 AI 讨论架构、排查问题、拆解需求，都会产生高价值知识，但这些内容常常随着聊天窗口关闭而丢失。
@@ -19,7 +21,17 @@ Loom 会把这些知识自动留下来：
 
 ## 快速开始
 
-### 1. 构建项目
+### 1. 安装（推荐 npm）
+
+```bash
+# 全局安装（推荐，便于 OpenCode / 终端直接调用）
+npm install -g loom-memory
+
+# 验证
+loom-cli help
+```
+
+### 1.1 从源码构建（开发者）
 
 ```bash
 git clone <your-repo-url>
@@ -35,14 +47,14 @@ npm run build
 <details>
 <summary><b>Cursor</b></summary>
 
-在项目根目录 `.cursor/mcp.json` 中添加：
+在项目根目录 `.cursor/mcp.json` 中添加（若已全局安装可直接用 `loom` 命令）：
 
 ```json
 {
   "mcpServers": {
     "loom": {
-      "command": "node",
-      "args": ["/absolute/path/to/loom/dist/index.js"],
+      "command": "loom",
+      "args": [],
       "env": {
         "LOOM_WORK_DIR": "/your/project/root"
       }
@@ -56,14 +68,14 @@ npm run build
 <details>
 <summary><b>VS Code（Copilot）</b></summary>
 
-在 `settings.json` 中添加：
+在 `settings.json` 中添加（若未全局安装，可改回 `node + dist/index.js` 方式）：
 
 ```json
 {
   "github.copilot.chat.mcp.servers": {
     "loom": {
-      "command": "node",
-      "args": ["/absolute/path/to/loom/dist/index.js"],
+      "command": "loom",
+      "args": [],
       "env": {
         "LOOM_WORK_DIR": "/your/project/root"
       }
@@ -115,7 +127,7 @@ scope 说明：`--scope local`（当前项目）、`--scope project`（团队共
   "mcp": {
     "loom": {
       "type": "local",
-      "command": ["node", "/absolute/path/to/loom/dist/index.js"],
+      "command": ["loom"],
       "enabled": true,
       "environment": {
         "LOOM_WORK_DIR": "/your/project/root"
@@ -159,19 +171,15 @@ LOOM_WORK_DIR = "/your/project/root"
 如果 OpenClaw 当前不支持 MCP，可直接使用 Loom CLI Wrapper：
 
 ```bash
-# 在 Loom 项目目录内
-npm install
-npm run build
-
-# 让 OpenClaw 调用该命令即可
-./dist/cli.js trace --query "auth architecture" --json
+# 全局安装后可直接调用
+loom-cli trace --query "auth architecture" --json
 ```
 
 推荐让 OpenClaw 调用以下命令模式：
 
-- 写入知识：`./dist/cli.js weave --category concepts --title "..." --content "..." --tags a,b --mode append --json`
-- 检索知识：`./dist/cli.js trace --query "..." --category concepts --limit 5 --json`
-- 体检知识：`./dist/cli.js reflect --maxFindings 20 --json`
+- 写入知识：`loom-cli weave --category concepts --title "..." --content "..." --tags a,b --mode append --json`
+- 检索知识：`loom-cli trace --query "..." --category concepts --limit 5 --json`
+- 体检知识：`loom-cli reflect --maxFindings 20 --json`
 
 > 说明：CLI Wrapper 是 MCP 的兼容适配层，不依赖宿主是否支持 MCP。
 
@@ -361,13 +369,16 @@ node dist/cli.js doctor --failOn error --json
 | `loom_log` | 查看知识变更的 Git 历史 |
 | `loom_deprecate` | 将旧条目标记为 deprecated，并记录废弃原因和替代项 |
 | `loom_reflect` | 执行知识库自检，输出冲突、过期、缺少标签、可合并项 |
+| `loom_probe_start` | 启动主动提问会话，生成问题并保存 session |
+| `loom_probe_commit` | 提交回答并写回 threads（两阶段显式流程） |
 | `loom_probe` | 主动提问与回写记忆（同一工具支持 start/commit 两阶段） |
 | `loom_changelog` | 维护公开 CHANGELOG（按日期聚合核心变更） |
+| `loom_metrics_snapshot` | 生成指标快照 JSON（治理通过率与辅助指标） |
 | `loom_upgrade` | 升级 Loom MCP 安装本体（从 GitHub 拉取最新） |
 
 ## CLI 命令列表（`node dist/cli.js <command>`）
 
-`init`、`weave`、`ingest`、`closeout`、`trace`、`read`、`list`、`deprecate`、`reflect`、`doctor`、`sync`、`log`、`changelog`、`upgrade`
+`init`、`weave`、`ingest`、`probe-start`、`probe-commit`、`metrics-snapshot`、`closeout`、`trace`、`read`、`list`、`deprecate`、`reflect`、`doctor`、`sync`、`log`、`changelog`、`upgrade`
 
 ## 知识分类
 
@@ -390,8 +401,11 @@ node dist/cli.js doctor --failOn error --json
 │   └── why-postgresql.md
 ├── threads/          # 对话/讨论沉淀
 │   └── 2026-03-18-api-design.md
-└── probes/           # 主动提问会话状态（probe sessions）
-    └── probe-xxxxx.json
+├── probes/           # 主动提问会话状态（probe sessions）
+│   └── probe-xxxxx.json
+├── events.jsonl      # 事件流（append-only）
+└── metrics/          # 指标快照输出
+    └── snapshot-YYYY-MM-DD.json
 ```
 
 ## 配置说明

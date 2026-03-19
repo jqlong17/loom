@@ -4,6 +4,8 @@
 
 Loom is an MCP (Model Context Protocol) server that turns your AI conversations into a structured, version-controlled Markdown knowledge base. It runs locally, uses your editor's built-in AI (no API key needed), and syncs via Git for team collaboration.
 
+> npm package name: `loom-memory` (product name remains Loom).
+
 ## Why Loom?
 
 Every time you discuss architecture, debug a tricky issue, or explore a new feature with an AI assistant, valuable knowledge is created — and then lost when the chat window closes.
@@ -17,7 +19,17 @@ Loom captures that knowledge automatically:
 
 ## Quick Start
 
-### 1. Build
+### 1. Install (npm recommended)
+
+```bash
+# Global install (recommended for OpenCode / terminal usage)
+npm install -g loom-memory
+
+# Verify
+loom-cli help
+```
+
+### 1.1 Build from source (for contributors)
 
 ```bash
 git clone <your-repo-url>
@@ -33,14 +45,14 @@ Replace the paths below with your actual paths.
 <details>
 <summary><b>Cursor</b></summary>
 
-Add to `.cursor/mcp.json` in your project root:
+Add to `.cursor/mcp.json` in your project root (if globally installed, use `loom` directly):
 
 ```json
 {
   "mcpServers": {
     "loom": {
-      "command": "node",
-      "args": ["/absolute/path/to/loom/dist/index.js"],
+      "command": "loom",
+      "args": [],
       "env": {
         "LOOM_WORK_DIR": "/your/project/root"
       }
@@ -54,14 +66,14 @@ Add to `.cursor/mcp.json` in your project root:
 <details>
 <summary><b>VS Code (Copilot)</b></summary>
 
-Add to `settings.json`:
+Add to `settings.json` (if not globally installed, keep using `node + dist/index.js`):
 
 ```json
 {
   "github.copilot.chat.mcp.servers": {
     "loom": {
-      "command": "node",
-      "args": ["/absolute/path/to/loom/dist/index.js"],
+      "command": "loom",
+      "args": [],
       "env": {
         "LOOM_WORK_DIR": "/your/project/root"
       }
@@ -157,19 +169,15 @@ LOOM_WORK_DIR = "/your/project/root"
 If OpenClaw does not support MCP yet, use Loom CLI Wrapper directly:
 
 ```bash
-# In Loom project directory
-npm install
-npm run build
-
-# OpenClaw can call this command
-./dist/cli.js trace --query "auth architecture" --json
+# After global install
+loom-cli trace --query "auth architecture" --json
 ```
 
 Recommended command patterns for OpenClaw:
 
-- Write knowledge: `./dist/cli.js weave --category concepts --title "..." --content "..." --tags a,b --mode append --json`
-- Search knowledge: `./dist/cli.js trace --query "..." --category concepts --limit 5 --json`
-- Audit knowledge: `./dist/cli.js reflect --maxFindings 20 --json`
+- Write knowledge: `loom-cli weave --category concepts --title "..." --content "..." --tags a,b --mode append --json`
+- Search knowledge: `loom-cli trace --query "..." --category concepts --limit 5 --json`
+- Audit knowledge: `loom-cli reflect --maxFindings 20 --json`
 
 > Note: CLI Wrapper is a compatibility layer and does not depend on MCP support.
 
@@ -355,13 +363,16 @@ This avoids logic drift between CLI and MCP paths and improves long-term regress
 | `loom_log` | Show Git history of knowledge changes |
 | `loom_deprecate` | Mark an entry deprecated with reason and optional replacement pointer |
 | `loom_reflect` | Run a self-audit for conflicts, stale entries, missing tags, and merge candidates |
+| `loom_probe_start` | Start an active inquiry session and persist generated questions |
+| `loom_probe_commit` | Commit answers and write Q&A back into threads (explicit 2-phase flow) |
 | `loom_probe` | Active inquiry + memory persistence (same tool for start/commit) |
 | `loom_changelog` | Maintain public CHANGELOG grouped by day-level core changes |
+| `loom_metrics_snapshot` | Generate metrics snapshot JSON for governance and auxiliary metrics |
 | `loom_upgrade` | Upgrade Loom MCP installation itself from GitHub |
 
 ## CLI Commands (`node dist/cli.js <command>`)
 
-`init`, `weave`, `ingest`, `closeout`, `trace`, `read`, `list`, `deprecate`, `reflect`, `doctor`, `sync`, `log`, `changelog`, `upgrade`
+`init`, `weave`, `ingest`, `probe-start`, `probe-commit`, `metrics-snapshot`, `closeout`, `trace`, `read`, `list`, `deprecate`, `reflect`, `doctor`, `sync`, `log`, `changelog`, `upgrade`
 
 ## Knowledge Categories
 
@@ -384,8 +395,11 @@ This avoids logic drift between CLI and MCP paths and improves long-term regress
 │   └── why-postgresql.md
 ├── threads/          # Conversation summaries
 │   └── 2026-03-18-api-design.md
-└── probes/           # Probe session states
-    └── probe-xxxxx.json
+├── probes/           # Probe session states
+│   └── probe-xxxxx.json
+├── events.jsonl      # Append-only event stream
+└── metrics/          # Metrics snapshot outputs
+    └── snapshot-YYYY-MM-DD.json
 ```
 
 ## Configuration

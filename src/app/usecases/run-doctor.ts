@@ -1,4 +1,5 @@
 import { runDoctor } from "../../core/loom-core.js";
+import { appendEvent } from "../../events.js";
 import { successResult, type ApplicationResult } from "../../contracts/application-result.js";
 import type { DoctorCommand, DoctorOutcome } from "../../contracts/knowledge.js";
 
@@ -14,12 +15,33 @@ export async function executeRunDoctor(params: {
     failOn: params.command.failOn,
   });
 
-  return successResult({
-    failOn: report.failOn,
-    shouldFail: report.shouldFail,
-    scannedEntries: report.scannedEntries,
-    generatedAt: report.generatedAt,
-    summary: report.summary,
-    issues: report.issues,
+  const eventFile = await appendEvent(params.loomRoot, {
+    type: "doctor.executed",
+    ts: new Date().toISOString(),
+    payload: {
+      failOn: report.failOn,
+      shouldFail: report.shouldFail,
+      summary: report.summary,
+    },
   });
+
+  return successResult(
+    {
+      failOn: report.failOn,
+      shouldFail: report.shouldFail,
+      scannedEntries: report.scannedEntries,
+      generatedAt: report.generatedAt,
+      summary: report.summary,
+      issues: report.issues,
+    },
+    [],
+    [eventFile],
+    {
+      shouldFail: report.shouldFail,
+      level: report.shouldFail ? "error" : "info",
+      reason: report.shouldFail
+        ? `doctor_fail_on_${report.failOn}`
+        : "doctor_passed",
+    },
+  );
 }
