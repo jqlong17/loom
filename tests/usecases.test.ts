@@ -174,5 +174,6 @@ describe("application usecases", () => {
     expect(snapshot.data?.snapshot.metrics.governancePassRate).toBeGreaterThan(0);
     expect(snapshot.data?.snapshot.metrics.probeCompletionRate).toBe(1);
     expect(snapshot.data?.snapshot.metrics.captureRate).toBe(0);
+    expect(Number.isFinite(snapshot.data?.snapshot.metrics.tokenROI)).toBe(true);
   });
 });

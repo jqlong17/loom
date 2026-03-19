@@ -5,6 +5,8 @@ Follow these guidelines to proactively maintain a living knowledge base.
 
 ## When to WRITE (loom_weave)
 
+**Explicit trigger:** When the user says 「记一下」「写进 loom」「更新记忆」「把这段记下来」 or similar, call `loom_weave` immediately with a concise summary of the current topic.
+
 Proactively call `loom_weave` when any of the following happen during our conversation:
 
 - A system architecture or module boundary is defined or clarified
@@ -13,6 +15,8 @@ Proactively call `loom_weave` when any of the following happen during our conver
 - A non-obvious constraint or trade-off is identified
 - A bug root cause is found and the fix approach is decided
 - A feature design is finalized after discussion
+
+Before ending a multi-turn conversation, if this session produced any recordable conclusion (decision, concept, or thread summary), call `loom_weave` once so that `.loom` is updated without the user having to ask.
 
 **Categories:**
 

@@ -1,0 +1,28 @@
+{
+  "name": "loom-eval-v1",
+  "description": "关联性+复杂性：多词 query、标签/领域、图扩展",
+  "seed": "default",
+  "cases": [
+    {
+      "id": "multi-word-concept",
+      "query": "订单 状态机 生命周期",
+      "expectedTitles": ["订单领域模型"],
+      "category": "concepts",
+      "tags": ["orders", "domain"],
+      "minResults": 1
+    },
+    {
+      "id": "tag-filter-payments",
+      "query": "支付",
+      "expectedTitles": ["支付网关架构", "payment provider choice"],
+      "tags": ["payments"],
+      "minResults": 1
+    },
+    {
+      "id": "graph-gateway",
+      "query": "gateway 渠道",
+      "expectedTitles": ["支付网关架构"],
+      "minResults": 1
+    }
+  ]
+}

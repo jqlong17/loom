@@ -133,6 +133,7 @@ export interface MetricsSnapshotOutcome {
       captureRate: number;
       retrievalHitRate: number;
       governancePassRate: number;
+      tokenROI: number;
       danglingLinkCount: number;
       isolatedNodeCount: number;
       probeCompletionRate: number;
@@ -174,6 +175,7 @@ export interface MetricsReportOutcome {
     m1CaptureRate: number;
     m2RetrievalHitRate: number;
     m3GovernancePassRate: number;
+    m4TokenROI: number;
   };
   basedOn: {
     events: number;

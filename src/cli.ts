@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import * as fs from "fs/promises";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, resolveLoomPath, ensureLoomStructure } from "./config.js";
@@ -25,6 +26,10 @@ import { executeQueryEvents } from "./app/usecases/query-events.js";
 import { executeMetricsReport } from "./app/usecases/metrics-report.js";
 import { formatDoctorPayload } from "./adapters/doctor-adapter.js";
 import { appendEvent } from "./events.js";
+import {
+  appendRawConversationRecord,
+  inferSessionIdFromUnknown,
+} from "./raw-conversation.js";
 
 type ArgMap = Record<string, string | boolean>;
 
@@ -35,6 +40,7 @@ interface ParsedArgs {
 
 const WORK_DIR = process.env.LOOM_WORK_DIR ?? process.cwd();
 const SERVER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+let lastCliOutput: unknown;
 
 function parseArgs(argv: string[]): ParsedArgs {
   const [, , command, ...rest] = argv;
@@ -100,6 +106,7 @@ function parseJsonArg<T>(args: ArgMap, key: string): T | undefined {
 }
 
 function print(data: unknown, jsonMode: boolean): void {
+  lastCliOutput = data;
   if (jsonMode) {
     console.log(JSON.stringify(data, null, 2));
     return;
@@ -121,6 +128,7 @@ Commands:
   init
   weave --category <concepts|decisions|threads> --title <t> --content <text> [--tags a,b] [--links a,b] [--domain d] [--mode replace|append|section]
   ingest --category <concepts|decisions|threads> --title <t> --content <text> [--tags a,b] [--links a,b] [--domain d] [--mode replace|append|section] [--commit true|false] [--changelog true|false]
+  ingest-from-file --file <path> [--category concepts|decisions|threads] [--title <t>] [--tags a,b] [--links a,b] [--domain d]
   doctor [--staleDays 30] [--includeThreads true|false] [--maxFindings 20] [--failOn none|error|warn]
   probe-start --context <text> [--goal <text>] [--maxQuestions 3]
   probe-commit [--sessionId <id>] [--context <text>] [--goal <text>] [--maxQuestions 3] --answers '<json-array>' [--title <t>] [--tags a,b] [--commit true|false]
@@ -128,7 +136,7 @@ Commands:
   metrics-report [--since YYYY-MM-DD] [--limit 500] [--reportDate YYYY-MM-DD]
   events [--type eventType] [--since YYYY-MM-DD] [--limit 50] [--order asc|desc]
   closeout --title <t> --content <text> [--category threads|concepts] [--tags a,b] [--mode append|replace|section]
-  trace --query <text> [--category <c>] [--tags a,b] [--limit n]
+  trace --query <text> [--category <c>] [--tags a,b] [--limit n] [--traceMode legacy|layered]
   read --category <c> --slug <filename-without-md>
   list
   deprecate --category <c> --slug <s> --reason <text> [--superseded_by <path>]
@@ -146,6 +154,7 @@ Global:
 async function main(): Promise<void> {
   const { command, args } = parseArgs(process.argv);
   const jsonMode = asBool(args, "json", false) ?? false;
+  lastCliOutput = undefined;
 
   if (!command || command === "help" || command === "--help") {
     print(helpText(), false);
@@ -160,8 +169,9 @@ async function main(): Promise<void> {
   }
 
   const git = new GitManager(WORK_DIR, config);
-
-  switch (command) {
+  let commandError: unknown;
+  try {
+    switch (command) {
     case "init": {
       await ensureLoomStructure(loomRoot);
       const commitResult = await git.commitChanges([loomRoot], "initialize knowledge base");
@@ -265,6 +275,63 @@ async function main(): Promise<void> {
       return;
     }
 
+    case "ingest-from-file": {
+      const filePath = asString(args, "file");
+      if (!filePath) {
+        fail("ingest-from-file requires --file <path>");
+      }
+      const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(WORK_DIR, filePath);
+      const raw = await fs.readFile(absPath, "utf-8").catch((e) => {
+        fail(`Cannot read file: ${absPath} — ${(e as Error).message}`);
+      });
+      const firstLine = raw.split("\n")[0]?.trim() ?? "";
+      const titleFromHeading = firstLine.startsWith("# ")
+        ? firstLine.slice(2).trim()
+        : null;
+      const title =
+        asString(args, "title") ??
+        titleFromHeading ??
+        path.basename(absPath, path.extname(absPath));
+      const category = (asString(args, "category") ?? "threads") as
+        | "concepts"
+        | "decisions"
+        | "threads";
+      if (!["concepts", "decisions", "threads"].includes(category)) {
+        fail("invalid --category");
+      }
+      const output = await executeIngestKnowledge({
+        workDir: WORK_DIR,
+        loomRoot,
+        config,
+        git,
+        command: {
+          category,
+          title,
+          content: raw,
+          tags: asList(args, "tags"),
+          links: asList(args, "links"),
+          domain: asString(args, "domain"),
+          mode: "replace",
+          commit: asBool(args, "commit", true) ?? true,
+          changelog: false,
+        },
+      });
+      if (!output.ok || !output.data) {
+        fail(output.issues.map((i) => i.suggestion ?? i.message).join("\n"));
+      }
+      print(
+        {
+          ok: true,
+          ingest: output.data.ingest,
+          filePath: absPath,
+          lint: output.data.lintIssues,
+          git: output.data.git,
+        },
+        jsonMode,
+      );
+      return;
+    }
+
     case "closeout": {
       const title = asString(args, "title");
       const content = asString(args, "content");
@@ -340,6 +407,7 @@ async function main(): Promise<void> {
           | undefined,
         tags: asList(args, "tags"),
         limit: asNumber(args, "limit"),
+        traceMode: asString(args, "traceMode") as "legacy" | "layered" | undefined,
       });
       await appendEvent(loomRoot, {
         type: "knowledge.traced",
@@ -351,7 +419,25 @@ async function main(): Promise<void> {
           count: results.length,
         },
       });
-      print({ ok: true, count: results.length, results }, jsonMode);
+      if (jsonMode) {
+        print({ ok: true, count: results.length, results }, true);
+      } else if (results.length === 0) {
+        print(`No knowledge found for "${query}".`, false);
+      } else {
+        const lines = results.map((item, idx) =>
+          [
+            `${idx + 1}. ${item.title} [${item.category}]`,
+            `   file: ${item.filePath}`,
+            `   score: ${item.score ?? 0}`,
+            `   why: ${item.whySummary ?? item.whyMatched?.join(", ") ?? "n/a"}`,
+            `   snippet: ${item.snippet}`,
+          ].join("\n"),
+        );
+        print(
+          `Found ${results.length} result(s) for "${query}":\n\n${lines.join("\n\n")}`,
+          false,
+        );
+      }
       return;
     }
 
@@ -556,6 +642,8 @@ async function main(): Promise<void> {
           type: type as
             | "knowledge.ingested"
             | "knowledge.traced"
+            | "index.rebuilt"
+            | "index.query.executed"
             | "probe.started"
             | "probe.committed"
             | "doctor.executed"
@@ -636,8 +724,27 @@ async function main(): Promise<void> {
       return;
     }
 
-    default:
-      fail(`unknown command: ${command}`);
+      default:
+        fail(`unknown command: ${command}`);
+    }
+  } catch (err) {
+    commandError = err;
+    throw err;
+  } finally {
+    await appendRawConversationRecord(loomRoot, config, {
+      ts: new Date().toISOString(),
+      source: "cli",
+      sessionId: inferSessionIdFromUnknown(args),
+      channel: "command",
+      name: command,
+      input: args,
+      output: lastCliOutput,
+      ok: !commandError,
+      error: commandError ? (commandError instanceof Error ? commandError.message : String(commandError)) : undefined,
+      meta: {
+        jsonMode,
+      },
+    });
   }
 }
 

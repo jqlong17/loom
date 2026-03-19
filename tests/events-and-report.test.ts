@@ -29,6 +29,16 @@ describe("events and metrics report", () => {
       ts: "2026-03-19T00:00:10.000Z",
       payload: { shouldFail: false },
     });
+    await appendEvent(loomRoot, {
+      type: "index.rebuilt",
+      ts: "2026-03-19T00:00:12.000Z",
+      payload: { totalEntries: 1 },
+    });
+    await appendEvent(loomRoot, {
+      type: "index.query.executed",
+      ts: "2026-03-19T00:00:13.000Z",
+      payload: { query: "auth", count: 1 },
+    });
 
     const all = await readEvents(loomRoot);
     const traces = queryEvents(all, { type: "knowledge.traced", order: "asc" });
@@ -37,6 +47,8 @@ describe("events and metrics report", () => {
     expect(replay.ingestedCount).toBe(1);
     expect(replay.traceHitCount).toBe(1);
     expect(replay.doctorPassCount).toBe(1);
+    expect(replay.indexRebuiltCount).toBe(1);
+    expect(replay.indexQueryCount).toBe(1);
   });
 
   it("generates events usecase and metrics report usecase", async () => {
@@ -64,6 +76,16 @@ describe("events and metrics report", () => {
       ts: "2026-03-19T01:03:00.000Z",
       payload: { shouldFail: false },
     });
+    await appendEvent(loomRoot, {
+      type: "index.rebuilt",
+      ts: "2026-03-19T01:03:10.000Z",
+      payload: { totalEntries: 1 },
+    });
+    await appendEvent(loomRoot, {
+      type: "index.query.executed",
+      ts: "2026-03-19T01:03:20.000Z",
+      payload: { query: "auth", mode: "layered", count: 1 },
+    });
     await fs.mkdir(path.join(loomRoot, "metrics"), { recursive: true });
     await fs.writeFile(
       path.join(loomRoot, "metrics", "snapshot-2026-03-19.json"),
@@ -76,7 +98,7 @@ describe("events and metrics report", () => {
       command: { since: "2026-03-19", limit: 10, order: "asc" },
     });
     expect(queried.ok).toBe(true);
-    expect(queried.data?.total).toBe(4);
+    expect(queried.data?.total).toBe(6);
     expect(queried.data?.counts["knowledge.ingested"]).toBe(1);
 
     const report = await executeMetricsReport({
@@ -85,7 +107,10 @@ describe("events and metrics report", () => {
     });
     expect(report.ok).toBe(true);
     expect(report.data?.summary.m1CaptureRate).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(report.data?.summary.m4TokenROI)).toBe(true);
     expect(report.data?.reportMarkdown.includes("M3 Governance Pass Rate")).toBe(true);
+    expect(report.data?.reportMarkdown.includes("M4 Token ROI")).toBe(true);
+    expect(report.data?.reportMarkdown.includes("Index Pipeline Health")).toBe(true);
     expect(report.data?.basedOn.latestSnapshot?.endsWith("snapshot-2026-03-19.json")).toBe(
       true,
     );
@@ -102,5 +127,6 @@ describe("events and metrics report", () => {
     expect(snapshot.ok).toBe(true);
     expect(snapshot.data?.snapshot.metrics.captureRate).toBe(0.5);
     expect(snapshot.data?.snapshot.metrics.retrievalHitRate).toBe(1);
+    expect(Number.isFinite(snapshot.data?.snapshot.metrics.tokenROI)).toBe(true);
   });
 });

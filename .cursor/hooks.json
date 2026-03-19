@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionEnd": [
+      { "command": ".cursor/hooks/loom-session-end.sh" }
+    ]
+  }
+}

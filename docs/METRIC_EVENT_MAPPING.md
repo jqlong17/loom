@@ -17,6 +17,8 @@
 | --- | --- | --- | --- |
 | `knowledge.ingested` | `ingest/weave` 成功后 | `category`, `filePath`, `isUpdate` | 统计沉淀速度、类别分布 |
 | `knowledge.traced` | 执行 `trace` 检索后 | `query`, `count`, `category`, `tags` | 计算检索命中代理指标（M2） |
+| `index.rebuilt` | 执行 `rebuildIndex` 后 | `totalEntries`, `categories`, `indexPath` | 统计索引更新频率、观测索引新鲜度 |
+| `index.query.executed` | 执行分层/回退检索后 | `query`, `mode`, `count`, `category`, `tags`, `contextChars`, `retrievedChars`, `contextTokens`, `tokenROI` | 统计索引查询样本量与模式分布；**M4 Token ROI** 聚合用 `sum(retrievedChars)/sum(contextChars)` |
 | `probe.started` | 创建主动提问 session | `sessionId`, `questionCount` | 统计主动澄清触发率 |
 | `probe.committed` | 回答提交并写入记忆后 | `sessionId`, `matched`, `unmatched` | 计算提问闭环率、回答匹配质量 |
 | `doctor.executed` | 运行治理检查后 | `shouldFail`, `summary` | 计算治理通过率（M3） |
@@ -31,6 +33,12 @@
 - `retrievalHitRate`（M2）：
   - 基于事件流近似计算：`knowledge.traced(count>0) / knowledge.traced(total)`。
   - 说明：以 trace 命中作为“检索命中且被引用”的早期代理值。
+- `tokenROI`（M4）：
+  - 基于 `index.query.executed` 事件：对窗口内事件求 `sum(retrievedChars) / max(1, sum(contextChars))`。
+  - 单次事件 payload 含 `contextChars`（本次检索消耗的上下文字符数）、`retrievedChars`（返回 snippet 总长）、`contextTokens`（字符估 token）、`tokenROI`（单次比值）。
+- 索引闭环辅助观测：
+  - 通过 `index.rebuilt` 观测索引更新频率，避免“内容更新但索引陈旧”。
+  - 通过 `index.query.executed` 观测检索样本量与 `mode`（`layered/legacy`）分布。
 - `governancePassRate`：
   - 优先使用历史 `doctor.executed` 事件中 `shouldFail=false` 的比例。
   - 若历史为空，则回退到本次 doctor 结果（通过=1，失败=0）。

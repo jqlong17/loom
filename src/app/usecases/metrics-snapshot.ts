@@ -83,6 +83,18 @@ export async function executeMetricsSnapshot(params: {
     (tracedHits.length / Math.max(tracedEvents.length, 1)).toFixed(4),
   );
 
+  const indexQueryEvents = events.filter((e) => e.type === "index.query.executed");
+  let sumContextChars = 0;
+  let sumRetrievedChars = 0;
+  for (const e of indexQueryEvents) {
+    const p = e.payload as { contextChars?: number; retrievedChars?: number };
+    sumContextChars += p.contextChars ?? 0;
+    sumRetrievedChars += p.retrievedChars ?? 0;
+  }
+  const tokenROI = Number(
+    (sumRetrievedChars / Math.max(1, sumContextChars)).toFixed(4),
+  );
+
   const byCategory = entries.reduce<Record<string, number>>((acc, item) => {
     acc[item.category] = (acc[item.category] ?? 0) + 1;
     return acc;
@@ -109,6 +121,7 @@ export async function executeMetricsSnapshot(params: {
       captureRate,
       retrievalHitRate,
       governancePassRate,
+      tokenROI,
       danglingLinkCount,
       isolatedNodeCount,
       probeCompletionRate,

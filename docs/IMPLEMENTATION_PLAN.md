@@ -13,6 +13,7 @@
 - [x] 指标快照：`loom metrics-snapshot` + `metrics.snapshot.v1`
 - [x] 文档：`docs/METRIC_EVENT_MAPPING.md`
 - [x] 测试：usecase 契约测试 + adapter 同构测试（CLI/MCP）
+- [x] 可配置全量原始对话记录（MCP/CLI 输入输出）写入 `.loom/raw_conversations/*.jsonl`
 
 ### 已知缺口（Open Gaps）
 
@@ -20,6 +21,8 @@
 - [x] `loom metrics report` 周报草稿命令（决策层可读输出缺失）
 - [x] 事件流回放测试（缺少时序回归保障）
 - [x] PR 模板加入“指标影响 + 验证数据”字段
+- [ ] 会话级聚合与分析脚本（raw conversation -> 沉淀知识对齐率）
+- [ ] Cursor/OpenCode hooks 的默认集成模板（开箱即用）
 
 ## 1) P0（最高优先级）：发布与分发（面向 OpenCode 用户）
 
@@ -43,6 +46,8 @@
 
 目标：把规则从“代码里的 if”升级为“策略化能力”。
 
+> 索引专项执行方案见：`docs/INDEX_EXECUTION_PLAN.md`（Tree 主骨架 + Graph 辅助）。
+
 ### 3.1 Domain Model
 
 - [ ] `KnowledgeEntry` 领域模型（状态、链接、领域、版本）
@@ -58,6 +63,20 @@
 - [ ] `IndexRepository` + MarkdownDriver
 - [ ] `ChangelogRepository` + MarkdownDriver
 - [ ] `VcsPort` + GitDriver
+
+### 3.4 Index Architecture Upgrade（Tree + Graph）
+
+目标：把当前“全量扫 md”检索升级为“分层按需读取 + 图关系辅助重排”。
+
+- [ ] 定义 L0/L1/L2 索引契约（Catalog/Digest/Source）
+- [ ] 生成 `.loom/index/catalog.v1.json`（L0）
+- [ ] 生成 `.loom/index/digest.v1.json`（L1）
+- [ ] 生成 `.loom/index/graph.v1.json`（Graph）
+- [ ] `trace` 改造为 `L0 -> L1 -> L2` 查询路径
+- [ ] 增加 `--traceMode legacy|layered` 降级开关
+- [ ] 指标新增：`indexRecallAt20`、`indexPrecisionAt3`、`avgL2ReadsPerQuery`
+- [ ] 事件新增：`index.rebuilt`、`index.query.executed`
+- [ ] adapter 同构测试覆盖 layered trace（CLI/MCP）
 
 ### 3.3 Policy Engine
 

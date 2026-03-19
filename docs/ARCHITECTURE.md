@@ -194,6 +194,7 @@ sequenceDiagram
 - **L1 正文写入触发**：把知识正文落到 `.loom/*.md`（核心记忆）。
 - **L2 流程触发**：把“人记得做”变成“流程保证做”（closeout、hook、CI 脚本）。
 - **L3 观测触发**：不一定写正文，但会记录事件/快照用于治理与复盘。
+- **索引事件闭环**：每次索引重建与检索都会写入事件（`index.rebuilt` / `index.query.executed`），用于衡量索引新鲜度与可用性。
 
 ---
 
@@ -223,7 +224,7 @@ flowchart LR
   end
 
   subgraph L3[L3 观测与治理触发]
-    T7[loom_trace<br/>检索记忆并记事件]
+    T7[loom_trace<br/>检索记忆并记事件<br/>输出 why_matched 解释]
     T8[loom_doctor<br/>质量体检门禁]
     T9[loom_events<br/>查询事件流]
     T10[loom_metrics_snapshot<br/>生成指标快照]
@@ -254,7 +255,7 @@ flowchart LR
 
   subgraph Data[数据产物]
     D1[.loom/*.md<br/>知识正文]
-    D2[events.jsonl<br/>事件事实源]
+    D2[events.jsonl<br/>事件事实源<br/>含 index.rebuilt / index.query.executed]
     D3[metrics snapshot/report<br/>指标快照与报告]
     D4[CHANGELOG.md<br/>公开变更记录]
     D5[Git commits<br/>可审计历史]

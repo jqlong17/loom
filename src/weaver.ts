@@ -2,6 +2,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { type LoomCategory } from "./config.js";
 import { slugify } from "./utils/slug.js";
+import { appendEvent } from "./events.js";
 
 export type WeaveMode = "replace" | "append" | "section";
 
@@ -136,12 +137,219 @@ export interface TraceResult {
   tags: string;
   updated: string;
   score?: number;
+  whyMatched?: string[];
+  whySummary?: string;
 }
 
 export interface TraceOptions {
   category?: LoomCategory;
   tags?: string[];
   limit?: number;
+  traceMode?: "legacy" | "layered";
+}
+
+export interface CatalogItem {
+  id: string;
+  title: string;
+  category: LoomCategory;
+  filePath: string;
+  tags: string[];
+  domain?: string;
+  updated: string;
+  status: "active" | "deprecated" | "unknown";
+}
+
+export interface DigestItem {
+  id: string;
+  summary: string;
+  keyPoints: string[];
+  relatedLinks: string[];
+  qualityFlags: string[];
+}
+
+export interface GraphEdge {
+  from: string;
+  to: string;
+  type: "link" | "domain";
+}
+
+export interface GraphSnapshot {
+  nodes: string[];
+  edges: GraphEdge[];
+}
+
+interface IndexArtifacts {
+  catalog: CatalogItem[];
+  digest: DigestItem[];
+  graph: GraphSnapshot;
+}
+
+function getIndexDir(loomRoot: string): string {
+  return path.join(loomRoot, "index");
+}
+
+function getIndexPaths(loomRoot: string): {
+  catalogPath: string;
+  digestPath: string;
+  graphPath: string;
+  metaPath: string;
+} {
+  const indexDir = getIndexDir(loomRoot);
+  return {
+    catalogPath: path.join(indexDir, "catalog.v1.json"),
+    digestPath: path.join(indexDir, "digest.v1.json"),
+    graphPath: path.join(indexDir, "graph.v1.json"),
+    metaPath: path.join(indexDir, "build-meta.v1.json"),
+  };
+}
+
+async function writeIndexArtifacts(
+  loomRoot: string,
+  artifacts: IndexArtifacts,
+): Promise<void> {
+  const { catalogPath, digestPath, graphPath, metaPath } = getIndexPaths(loomRoot);
+  await fs.mkdir(path.dirname(catalogPath), { recursive: true });
+  await fs.writeFile(catalogPath, JSON.stringify(artifacts.catalog, null, 2), "utf-8");
+  await fs.writeFile(digestPath, JSON.stringify(artifacts.digest, null, 2), "utf-8");
+  await fs.writeFile(graphPath, JSON.stringify(artifacts.graph, null, 2), "utf-8");
+  await fs.writeFile(
+    metaPath,
+    JSON.stringify(
+      {
+        schema: "loom.index.meta.v1",
+        generatedAt: new Date().toISOString(),
+        counts: {
+          catalog: artifacts.catalog.length,
+          digest: artifacts.digest.length,
+          nodes: artifacts.graph.nodes.length,
+          edges: artifacts.graph.edges.length,
+        },
+      },
+      null,
+      2,
+    ),
+    "utf-8",
+  );
+}
+
+async function readIndexArtifacts(loomRoot: string): Promise<IndexArtifacts | null> {
+  const { catalogPath, digestPath, graphPath } = getIndexPaths(loomRoot);
+  try {
+    const [catalogRaw, digestRaw, graphRaw] = await Promise.all([
+      fs.readFile(catalogPath, "utf-8"),
+      fs.readFile(digestPath, "utf-8"),
+      fs.readFile(graphPath, "utf-8"),
+    ]);
+    return {
+      catalog: JSON.parse(catalogRaw) as CatalogItem[],
+      digest: JSON.parse(digestRaw) as DigestItem[],
+      graph: JSON.parse(graphRaw) as GraphSnapshot,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function extractKeyPoints(raw: string): string[] {
+  const bodyStart = raw.indexOf("---", 4);
+  const body = bodyStart > 0 ? raw.slice(bodyStart + 3) : raw;
+  const headingPoints = body
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("## "))
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean);
+  if (headingPoints.length > 0) {
+    return headingPoints.slice(0, 5);
+  }
+  return body
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => line.slice(2).trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+function deriveQualityFlags(record: KnowledgeRecord): string[] {
+  const flags: string[] = [];
+  if (record.tags.length === 0) flags.push("missing_tags");
+  if (record.status !== "active") flags.push(record.status);
+  if (record.links.length === 0) flags.push("weak_connectivity");
+  return flags;
+}
+
+export async function buildIndexArtifacts(loomRoot: string): Promise<IndexArtifacts> {
+  const records = await loadRecords(loomRoot, true);
+  const catalog: CatalogItem[] = [];
+  const digest: DigestItem[] = [];
+  const edges: GraphEdge[] = [];
+  const byDomain = new Map<string, string[]>();
+
+  for (const record of records) {
+    const id = record.filePath;
+    catalog.push({
+      id,
+      title: record.title,
+      category: record.category,
+      filePath: record.filePath,
+      tags: record.tags,
+      domain: record.domain,
+      updated: record.updated,
+      status: record.status,
+    });
+    const raw = await fs.readFile(path.join(loomRoot, record.filePath), "utf-8");
+    digest.push({
+      id,
+      summary: truncateForIndex(extractSnippet(raw, ""), 260),
+      keyPoints: extractKeyPoints(raw),
+      relatedLinks: record.links,
+      qualityFlags: deriveQualityFlags(record),
+    });
+    for (const target of record.links) {
+      edges.push({ from: id, to: normalizeLinkPath(target), type: "link" });
+    }
+    if (record.domain) {
+      const group = byDomain.get(record.domain) ?? [];
+      group.push(id);
+      byDomain.set(record.domain, group);
+    }
+  }
+
+  for (const [, nodes] of byDomain) {
+    if (nodes.length < 2 || nodes.length > 20) continue;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        edges.push({ from: nodes[i], to: nodes[j], type: "domain" });
+      }
+    }
+  }
+
+  const graph: GraphSnapshot = {
+    nodes: catalog.map((c) => c.id),
+    edges: dedupeGraphEdges(edges),
+  };
+  const artifacts = { catalog, digest, graph };
+  await writeIndexArtifacts(loomRoot, artifacts);
+  return artifacts;
+}
+
+function truncateForIndex(text: string, maxChars: number): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (compact.length <= maxChars) return compact;
+  return `${compact.slice(0, maxChars)}...`;
+}
+
+function dedupeGraphEdges(edges: GraphEdge[]): GraphEdge[] {
+  const seen = new Set<string>();
+  const out: GraphEdge[] = [];
+  for (const edge of edges) {
+    const key = `${edge.type}::${edge.from}::${edge.to}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(edge);
+  }
+  return out;
 }
 
 interface KnowledgeRecord {
@@ -155,12 +363,55 @@ interface KnowledgeRecord {
   updated: string;
 }
 
+/** Character-based proxy for token count (≈4 chars/token for English/Markdown). */
+export function charsToTokenEstimate(chars: number): number {
+  return Math.max(0, Math.ceil(chars / 4));
+}
+
 export async function trace(
   loomRoot: string,
   query: string,
   options: TraceOptions = {},
 ): Promise<TraceResult[]> {
+  const mode = options.traceMode ?? "layered";
+  const { results, contextChars } =
+    mode === "legacy"
+      ? await traceLegacy(loomRoot, query, options)
+      : await traceLayered(loomRoot, query, options);
+  const retrievedChars = results.reduce((s, r) => s + r.snippet.length, 0);
+  const contextTokens = charsToTokenEstimate(contextChars);
+  const tokenROI =
+    contextTokens > 0 ? retrievedChars / Math.max(1, contextChars) : 0;
+  try {
+    await appendEvent(loomRoot, {
+      type: "index.query.executed",
+      ts: new Date().toISOString(),
+      payload: {
+        query,
+        mode,
+        category: options.category,
+        tags: options.tags,
+        limit: options.limit,
+        count: results.length,
+        contextChars,
+        retrievedChars,
+        contextTokens,
+        tokenROI,
+      },
+    });
+  } catch {
+    // keep trace availability even if event append fails
+  }
+  return results;
+}
+
+async function traceLegacy(
+  loomRoot: string,
+  query: string,
+  options: TraceOptions = {},
+): Promise<{ results: TraceResult[]; contextChars: number }> {
   const results: TraceResult[] = [];
+  let contextChars = 0;
   const terms = query
     .toLowerCase()
     .split(/\s+/)
@@ -183,6 +434,7 @@ export async function trace(
       if (!file.endsWith(".md")) continue;
       const filePath = path.join(dir, file);
       const raw = await fs.readFile(filePath, "utf-8");
+      contextChars += raw.length;
 
       const fm = parseFrontmatter(raw);
       const titleMatch = raw.match(/^# (.+)$/m);
@@ -208,6 +460,8 @@ export async function trace(
         tags: fm?.tags ?? "none",
         updated: fm?.updated ?? "unknown",
         score,
+        whyMatched: ["legacy_full_scan"],
+        whySummary: "Legacy full-scan keyword matching.",
       });
     }
   }
@@ -218,11 +472,148 @@ export async function trace(
     return Date.parse(b.updated || "") - Date.parse(a.updated || "");
   });
 
-  if (options.limit && options.limit > 0) {
-    return results.slice(0, options.limit);
+  const limited =
+    options.limit && options.limit > 0
+      ? results.slice(0, options.limit)
+      : results;
+  return { results: limited, contextChars };
+}
+
+async function traceLayered(
+  loomRoot: string,
+  query: string,
+  options: TraceOptions,
+): Promise<{ results: TraceResult[]; contextChars: number }> {
+  const limit = options.limit && options.limit > 0 ? options.limit : 10;
+  let contextChars = 0;
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const normalizedQuery = query.toLowerCase().trim();
+  const artifacts = (await readIndexArtifacts(loomRoot)) ?? (await buildIndexArtifacts(loomRoot));
+  contextChars += JSON.stringify(artifacts.catalog).length;
+  const digestMap = new Map(artifacts.digest.map((item) => [item.id, item]));
+  const adjacency = new Map<string, Set<string>>();
+
+  for (const edge of artifacts.graph.edges) {
+    const from = normalizeLinkPath(edge.from);
+    const to = normalizeLinkPath(edge.to);
+    const fromSet = adjacency.get(from) ?? new Set<string>();
+    fromSet.add(to);
+    adjacency.set(from, fromSet);
+    const toSet = adjacency.get(to) ?? new Set<string>();
+    toSet.add(from);
+    adjacency.set(to, toSet);
   }
 
-  return results;
+  const scored = artifacts.catalog
+    .filter((item) => {
+      if (options.category && item.category !== options.category) return false;
+      if (options.tags && options.tags.length > 0) {
+        const required = options.tags.map((t) => t.toLowerCase());
+        const hasAll = required.every((need) =>
+          item.tags.some((existing) => existing.toLowerCase() === need),
+        );
+        if (!hasAll) return false;
+      }
+      return item.status !== "deprecated";
+    })
+    .map((item) => {
+      const digest = digestMap.get(item.id);
+      const title = item.title.toLowerCase();
+      const tagText = item.tags.join(" ").toLowerCase();
+      const domain = (item.domain ?? "").toLowerCase();
+      const l1Text = `${digest?.summary ?? ""} ${(digest?.keyPoints ?? []).join(" ")}`.toLowerCase();
+      let score = 0;
+      const whyMatched: string[] = [];
+      if (normalizedQuery.length > 0 && title.includes(normalizedQuery)) {
+        score += 12;
+        whyMatched.push("title_exact");
+      }
+      if (normalizedQuery.length > 0 && tagText.includes(normalizedQuery)) {
+        score += 6;
+        whyMatched.push("tag_exact");
+      }
+      if (normalizedQuery.length > 0 && domain.includes(normalizedQuery)) {
+        score += 3;
+        whyMatched.push("domain_exact");
+      }
+      for (const term of terms) {
+        if (title.includes(term)) {
+          score += 4;
+          whyMatched.push(`title_term:${term}`);
+        }
+        if (tagText.includes(term)) {
+          score += 3;
+          whyMatched.push(`tag_term:${term}`);
+        }
+        if (domain.includes(term)) {
+          score += 2;
+          whyMatched.push(`domain_term:${term}`);
+        }
+        if (l1Text.includes(term)) {
+          score += 2;
+          whyMatched.push(`digest_term:${term}`);
+        }
+      }
+      const neighbors = adjacency.get(item.id)?.size ?? 0;
+      if (neighbors > 0) {
+        score += Math.min(2, neighbors * 0.2);
+        whyMatched.push(`graph_neighbors:${neighbors}`);
+      }
+      return { item, digest, score, whyMatched: Array.from(new Set(whyMatched)) };
+    })
+    .filter((row) => row.score > 0)
+    .sort((a, b) => {
+      const diff = b.score - a.score;
+      if (diff !== 0) return diff;
+      return Date.parse(b.item.updated || "") - Date.parse(a.item.updated || "");
+    });
+
+  const pool = scored.slice(0, Math.max(limit * 2, 20));
+  const expandedIds = new Set(pool.map((p) => p.item.id));
+  for (const row of pool.slice(0, Math.min(pool.length, 8))) {
+    const neighbors = adjacency.get(row.item.id);
+    if (!neighbors) continue;
+    for (const neighbor of neighbors) {
+      if (expandedIds.has(neighbor)) continue;
+      expandedIds.add(neighbor);
+    }
+  }
+
+  const candidateRows = scored
+    .filter((row) => expandedIds.has(row.item.id))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(limit, 5));
+
+  for (const row of candidateRows) {
+    const d = digestMap.get(row.item.id);
+    if (d) {
+      contextChars += (d.summary?.length ?? 0) + (d.keyPoints?.join(" ").length ?? 0);
+    }
+  }
+
+  const results: TraceResult[] = [];
+  for (const row of candidateRows) {
+    const abs = path.join(loomRoot, row.item.filePath);
+    const raw = await fs.readFile(abs, "utf-8");
+    contextChars += raw.length;
+    results.push({
+      title: row.item.title,
+      category: row.item.category,
+      filePath: row.item.filePath,
+      snippet: extractSnippet(raw, query),
+      tags: row.item.tags.join(", ") || "none",
+      updated: row.item.updated,
+      score: row.score,
+      whyMatched: row.whyMatched,
+      whySummary: summarizeWhyMatched(row.whyMatched),
+    });
+    if (results.length >= limit) break;
+  }
+  return { results, contextChars };
 }
 
 function extractSnippet(content: string, query: string): string {
@@ -237,6 +628,28 @@ function extractSnippet(content: string, query: string): string {
   const end = Math.min(body.length, idx + query.length + 120);
   const snippet = body.slice(start, end).trim();
   return (start > 0 ? "..." : "") + snippet + (end < body.length ? "..." : "");
+}
+
+function summarizeWhyMatched(reasons: string[] | undefined): string | undefined {
+  if (!reasons || reasons.length === 0) return undefined;
+  const labels: string[] = [];
+  if (reasons.includes("title_exact")) labels.push("标题精确命中");
+  if (reasons.includes("tag_exact")) labels.push("标签精确命中");
+  if (reasons.includes("domain_exact")) labels.push("领域精确命中");
+  if (reasons.some((r) => r.startsWith("title_term:"))) labels.push("标题词项匹配");
+  if (reasons.some((r) => r.startsWith("tag_term:"))) labels.push("标签词项匹配");
+  if (reasons.some((r) => r.startsWith("domain_term:"))) labels.push("领域词项匹配");
+  if (reasons.some((r) => r.startsWith("digest_term:"))) labels.push("摘要词项匹配");
+  const graph = reasons.find((r) => r.startsWith("graph_neighbors:"));
+  if (graph) {
+    const neighborCount = graph.split(":")[1] ?? "0";
+    labels.push(`图邻接增强(${neighborCount})`);
+  }
+  if (labels.length === 0 && reasons.includes("legacy_full_scan")) {
+    return "Legacy 全量扫描关键词匹配";
+  }
+  if (labels.length === 0) return "关键词匹配";
+  return labels.join(" + ");
 }
 
 function computeTraceScore(
@@ -670,6 +1083,7 @@ export async function deprecateEntry(
 }
 
 export async function rebuildIndex(loomRoot: string): Promise<string> {
+  await buildIndexArtifacts(loomRoot);
   const all = await listAll(loomRoot);
   const now = new Date().toISOString();
 
@@ -711,5 +1125,16 @@ ${sections}
 
   const indexPath = path.join(loomRoot, "index.md");
   await fs.writeFile(indexPath, indexContent, "utf-8");
+  await appendEvent(loomRoot, {
+    type: "index.rebuilt",
+    ts: new Date().toISOString(),
+    payload: {
+      totalEntries: all.length,
+      categories: Object.fromEntries(
+        Object.entries(grouped).map(([cat, items]) => [cat, items.length]),
+      ),
+      indexPath,
+    },
+  });
   return indexContent;
 }

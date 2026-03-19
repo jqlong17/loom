@@ -45,6 +45,10 @@ import { executeQueryEvents } from "./app/usecases/query-events.js";
 import { executeMetricsReport } from "./app/usecases/metrics-report.js";
 import { formatDoctorForMcp } from "./adapters/doctor-adapter.js";
 import { appendEvent } from "./events.js";
+import {
+  appendRawConversationRecord,
+  inferSessionIdFromUnknown,
+} from "./raw-conversation.js";
 
 const WORK_DIR = process.env.LOOM_WORK_DIR ?? process.cwd();
 const SERVER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -311,6 +315,68 @@ const server = new McpServer({
   name: "loom",
   version: SERVER_VERSION,
 });
+
+function errorToString(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function inferTurnIdFromUnknown(input: unknown): string | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const obj = input as Record<string, unknown>;
+  const candidate = obj.turnId ?? obj.turn_id ?? obj.message_id ?? obj.messageId;
+  return typeof candidate === "string" ? candidate : undefined;
+}
+
+function enableMcpRawLogging(): void {
+  const originalTool = server.tool.bind(server) as (
+    name: string,
+    description: string,
+    schema: Record<string, z.ZodTypeAny>,
+    handler: (args: Record<string, unknown>) => Promise<unknown>,
+  ) => void;
+
+  (server as unknown as { tool: typeof originalTool }).tool = (
+    name,
+    description,
+    schema,
+    handler,
+  ) => {
+    originalTool(name, description, schema, async (args) => {
+      const { config, loomRoot } = await getRuntimeContext();
+      try {
+        const output = await handler(args);
+        await appendRawConversationRecord(loomRoot, config, {
+          ts: new Date().toISOString(),
+          source: "mcp",
+          sessionId: inferSessionIdFromUnknown(args),
+          turnId: inferTurnIdFromUnknown(args),
+          channel: "tool_call",
+          name,
+          input: args,
+          output,
+          ok: true,
+        });
+        return output;
+      } catch (err) {
+        await appendRawConversationRecord(loomRoot, config, {
+          ts: new Date().toISOString(),
+          source: "mcp",
+          sessionId: inferSessionIdFromUnknown(args),
+          turnId: inferTurnIdFromUnknown(args),
+          channel: "tool_call",
+          name,
+          input: args,
+          ok: false,
+          error: errorToString(err),
+        });
+        throw err;
+      }
+    });
+  };
+}
+
+enableMcpRawLogging();
 
 // ─── Tool: loom_init ──────────────────────────────────────────
 server.tool(
@@ -618,11 +684,20 @@ server.tool(
       .number()
       .optional()
       .describe("Maximum results to return after relevance sorting"),
+    trace_mode: z
+      .enum(["legacy", "layered"])
+      .optional()
+      .describe("Trace pipeline mode: layered (default) or legacy full scan"),
   },
-  async ({ query, category, tags, limit }) => {
+  async ({ query, category, tags, limit, trace_mode }) => {
     const { loomRoot } = await getRuntimeContext();
 
-    const results = await trace(loomRoot, query, { category, tags, limit });
+    const results = await trace(loomRoot, query, {
+      category,
+      tags,
+      limit,
+      traceMode: trace_mode,
+    });
     await appendEvent(loomRoot, {
       type: "knowledge.traced",
       ts: new Date().toISOString(),
@@ -648,7 +723,7 @@ server.tool(
     const formatted = results
       .map(
         (r) =>
-          `### ${r.title} [${r.category}]\nFile: ${r.filePath}\nTags: ${r.tags} | Updated: ${r.updated} | Score: ${r.score ?? 0}\n\n${r.snippet}`,
+          `### ${r.title} [${r.category}]\nFile: ${r.filePath}\nTags: ${r.tags} | Updated: ${r.updated} | Score: ${r.score ?? 0}\nWhy: ${r.whySummary ?? (r.whyMatched?.join(", ") ?? "n/a")}\n\n${r.snippet}`,
       )
       .join("\n\n---\n\n");
 
@@ -1223,6 +1298,8 @@ server.tool(
       .enum([
         "knowledge.ingested",
         "knowledge.traced",
+        "index.rebuilt",
+        "index.query.executed",
         "probe.started",
         "probe.committed",
         "doctor.executed",

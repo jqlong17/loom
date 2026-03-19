@@ -12,6 +12,13 @@ export interface LoomConfig {
   branch: string;
   /** Git commit message prefix */
   commitPrefix: string;
+  /** Full raw conversation logging for analysis */
+  fullConversationLogging: {
+    enabled: boolean;
+    storageDir: string;
+    redact: boolean;
+    maxPayloadChars: number;
+  };
 }
 
 const DEFAULT_CONFIG: LoomConfig = {
@@ -20,6 +27,12 @@ const DEFAULT_CONFIG: LoomConfig = {
   autoPush: false,
   branch: "main",
   commitPrefix: "loom",
+  fullConversationLogging: {
+    enabled: false,
+    storageDir: "raw_conversations",
+    redact: true,
+    maxPayloadChars: 12000,
+  },
 };
 
 const CONFIG_FILE = ".loomrc.json";
@@ -29,7 +42,14 @@ export async function loadConfig(workDir: string): Promise<LoomConfig> {
   try {
     const raw = await fs.readFile(configPath, "utf-8");
     const userConfig = JSON.parse(raw) as Partial<LoomConfig>;
-    return { ...DEFAULT_CONFIG, ...userConfig };
+    return {
+      ...DEFAULT_CONFIG,
+      ...userConfig,
+      fullConversationLogging: {
+        ...DEFAULT_CONFIG.fullConversationLogging,
+        ...(userConfig.fullConversationLogging ?? {}),
+      },
+    };
   } catch {
     return { ...DEFAULT_CONFIG };
   }

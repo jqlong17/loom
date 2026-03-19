@@ -44,6 +44,21 @@ export async function executeMetricsReport(params: {
     (e) => (e.payload as { shouldFail?: boolean }).shouldFail === false,
   ).length;
   const probeStarted = events.filter((e) => e.type === "probe.started").length;
+  const indexRebuilt = events.filter((e) => e.type === "index.rebuilt").length;
+  const indexQueryEvents = events.filter(
+    (e) => e.type === "index.query.executed",
+  );
+  const indexQueries = indexQueryEvents.length;
+  let sumContextChars = 0;
+  let sumRetrievedChars = 0;
+  for (const e of indexQueryEvents) {
+    const p = e.payload as { contextChars?: number; retrievedChars?: number };
+    sumContextChars += p.contextChars ?? 0;
+    sumRetrievedChars += p.retrievedChars ?? 0;
+  }
+  const m4TokenROI = Number(
+    (sumRetrievedChars / Math.max(1, sumContextChars)).toFixed(4),
+  );
 
   const m1CaptureRate = clampRate(
     ingested / Math.max(ingested + probeStarted, 1),
@@ -72,6 +87,14 @@ export async function executeMetricsReport(params: {
     `- value: ${(m3GovernancePassRate * 100).toFixed(2)}%`,
     `- evidence: doctor pass=${doctorPass}/${doctor.length}`,
     "",
+    "M4 Token ROI:",
+    `- value: ${m4TokenROI.toFixed(4)} (retrievedChars/contextChars)`,
+    `- evidence: index.query.executed=${indexQueries}, sum(retrievedChars)/sum(contextChars)`,
+    "",
+    "Index Pipeline Health:",
+    `- evidence: index.rebuilt=${indexRebuilt}, index.query.executed=${indexQueries}`,
+    `- signal: ${indexQueries === 0 ? "检索样本不足，分层索引价值尚未充分观测。" : "已产生分层索引查询样本，可继续观察命中质量。"}`,
+    "",
     "Top Risks:",
     `1) ${traces.length === 0 ? "检索事件样本不足，M2 代表性有限。" : "持续追踪低命中检索并回写核心记忆。"}`,
     `2) ${doctor.length === 0 ? "doctor 执行频率不足，M3 稳定性待观察。" : "保持 doctor 执行节奏，避免治理盲区。"}`,
@@ -91,6 +114,7 @@ export async function executeMetricsReport(params: {
         m1CaptureRate,
         m2RetrievalHitRate,
         m3GovernancePassRate,
+        m4TokenROI,
       },
       basedOn: {
         events: events.length,

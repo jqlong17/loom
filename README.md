@@ -6,6 +6,11 @@
 
 Loom 是一个 **CLI-first** 的长期记忆系统，并兼容 MCP（Model Context Protocol）安装方式。它用来把你和 AI 的对话沉淀为结构化、可版本管理的 Markdown 知识库；本地运行、复用编辑器自带 AI（不需要额外 API Key），并可通过 Git 实现团队协作。
 
+**如何选择安装方式：**
+
+- **希望系统自动记录、更新记忆**（对话中由 AI 主动写入）：建议按 **MCP 方式**安装并配置到 Cursor / OpenCode / Claude Code 等，让 AI 在对话里调用 `loom_weave` / `loom_ingest`；也可配合 [Cursor sessionEnd hook](docs/CONVERSATION_TO_LOOM.md#cursor-示例sessionend-自动写入转录) 或 [OpenCode session.idle 插件](docs/OPENCODE_HOOKS_LOOM.md) 在会话结束时自动写入转录。
+- **希望更多自主控制**（自己或脚本决定何时写入）：建议按 **CLI 方式**安装（`npm i -g loom-memory`），通过 `loom ingest`、`loom ingest-from-file`、`loom weave` 等命令在需要时执行；不依赖 MCP，也不依赖 AI 是否在对话中调工具。
+
 > npm 包名：`loom-memory`（产品名仍为 Loom）。
 
 ## 为什么是 Loom？
@@ -23,9 +28,9 @@ Loom 会把这些知识自动留下来：
 
 你可以把 Loom 理解成“关键节点记忆系统”，不是把所有聊天原样录音，而是在有价值的时刻进行沉淀。
 
-- 当你和 AI 明确形成了结论（例如方案、决策、边界、复盘）时，会触发记忆写入。
-- 当你执行收口动作（如 `ingest` / `closeout`）时，会把这次产出结构化保存。
-- 当你做澄清问答（`probe`）并提交答案时，会把“问题-答案-依据”一起沉淀。
+- **接 MCP 时**：当 AI 在对话中调用 `loom_weave` / `loom_ingest` 时写入（例如形成结论、你说「记一下」、或按项目规则在收口时主动调用）；也可通过 Cursor/OpenCode 的会话结束 hook 自动写入本场转录。
+- **仅用 CLI 时**：当你或脚本执行 `ingest` / `ingest-from-file` / `weave` / `closeout` 时写入；AI 不会自动写，需你决定时机。
+- 当你做澄清问答（`probe`）并提交答案时，会把“问题-答案-依据”一起沉淀（MCP 或 CLI 均可触发）。
 
 ### 这个记忆系统有什么特点？
 
@@ -37,7 +42,7 @@ Loom 会把这些知识自动留下来：
 
 对技术同学：
 
-- **CLI-first，MCP 兼容**：既可脚本化自动执行，也可在对话中调用。
+- **MCP 用于自动记录、CLI 用于自主控制**：接 MCP 时 AI 可在对话中自动写；仅用 CLI 时由你或脚本在需要时执行命令。
 - **Git 原生可审计**：记忆变更可 diff、可 review、可回滚。
 - **有治理和指标闭环**：支持 doctor、events、metrics snapshot/report，能把“记忆质量”变成可观测与可改进的工程信号。
 
@@ -62,7 +67,9 @@ npm install
 npm run build
 ```
 
-### 2. 配置 AI 工具
+### 2. 配置 AI 工具（MCP：推荐用于「自动记录」）
+
+若希望 **AI 在对话中自动记录与更新记忆**，请按下方方式将 Loom 配置为 MCP 服务；配置后 AI 可在对话里直接调用 `loom_weave`、`loom_trace` 等工具。若仅需 **自主控制写入时机**（用 CLI 或脚本），可跳过本节，只安装 CLI（见上方「如何选择安装方式」）。
 
 以下配置中的路径请替换为你的实际路径。
 
@@ -229,8 +236,8 @@ loom-cli trace --query "auth architecture" --json
 
 [STEP 3 - 安装决策]
 如果用户确认安装：
-- 若客户端支持 MCP：走 MCP 安装
-- 若客户端不支持 MCP（如 OpenClaw）：自动切换 CLI Wrapper
+- 若用户希望「自动记录 / 对话中由 AI 写入」且客户端支持 MCP：走 MCP 安装
+- 若用户希望「自主控制 / 脚本化」或客户端不支持 MCP（如 OpenClaw）：使用 CLI Wrapper
 
 [STEP 3.5 - 作用域决策（必须）]
 - 默认 `project-first`：优先安装到项目级
@@ -273,7 +280,9 @@ loom-cli trace --query "auth architecture" --json
 
 ### 3. 开始使用
 
-配置完成后，你可以在 AI 聊天里直接使用 Loom：
+**MCP 已配置时**：在 AI 聊天里可直接说“记一下”“把我们刚才讨论的记进 Loom”等，AI 会调用 Loom 工具写入。**仅用 CLI 时**：在终端执行 `loom ingest` / `loom ingest-from-file` 等，或在脚本中调用。
+
+示例（MCP 场景）：
 
 ```
 "初始化当前项目的 Loom 知识库。"
@@ -339,9 +348,9 @@ Loom 初始化后会自动创建：
 - `dangling_link`：链接目标不存在
 - `isolated_node`：没有任何入边/出边的孤立条目（`core` 条目除外）
 
-### 4.3 CLI-First（推荐自动化路径）
+### 4.3 CLI 与自主控制（推荐脚本化 / CI 路径）
 
-如果你希望“稳定触发、可脚本化、可接入 CI”，建议优先使用 CLI：
+如果你希望“由自己或脚本决定何时写入、稳定触发、可接入 CI”，建议使用 CLI（无需 MCP）：
 
 - `ingest`：一条命令完成 lint + weave + index（可选 changelog/commit）
 - `doctor`：统一健康检查输出，可通过 `--failOn` 做门禁
@@ -428,6 +437,8 @@ node dist/cli.js doctor --failOn error --json
 ├── probes/           # 主动提问会话状态（probe sessions）
 │   └── probe-xxxxx.json
 ├── events.jsonl      # 事件流（append-only）
+├── raw_conversations/ # 可配置的全量原始对话日志（jsonl）
+│   └── events-YYYY-MM-DD.jsonl
 └── metrics/          # 指标快照输出
     └── snapshot-YYYY-MM-DD.json
 ```
@@ -442,7 +453,13 @@ node dist/cli.js doctor --failOn error --json
   "autoCommit": true,
   "autoPush": false,
   "branch": "main",
-  "commitPrefix": "loom"
+  "commitPrefix": "loom",
+  "fullConversationLogging": {
+    "enabled": false,
+    "storageDir": "raw_conversations",
+    "redact": true,
+    "maxPayloadChars": 12000
+  }
 }
 ```
 
@@ -453,6 +470,10 @@ node dist/cli.js doctor --failOn error --json
 | `autoPush` | `false` | 每次提交后自动推送远程 |
 | `branch` | `main` | 同步使用的分支 |
 | `commitPrefix` | `loom` | 提交信息前缀 |
+| `fullConversationLogging.enabled` | `false` | 开启后记录 MCP/CLI 原始输入输出到 `.loom/raw_conversations/*.jsonl` |
+| `fullConversationLogging.storageDir` | `raw_conversations` | 原始对话日志目录（位于 `.loom/` 下） |
+| `fullConversationLogging.redact` | `true` | 对常见敏感字段（token/secret/password 等）进行脱敏 |
+| `fullConversationLogging.maxPayloadChars` | `12000` | 单字段最大保留字符数，超出会截断 |
 
 ## 团队协作
 

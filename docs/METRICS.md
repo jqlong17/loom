@@ -31,6 +31,17 @@
   - Phase B：>= 85%
   - Phase C：>= 95%
 
+### M4 Token ROI（有效 Token 浓度）
+
+- 定义：同一 query 下 AI 能找到同样目标内容时，**有效产出（检索到的有用内容字符数）与所注入上下文的字符数之比**。比值越大，表示用越少的上下文换取了越多的有效召回，记忆系统越高效。
+- 公式：`Token ROI = sum(retrievedChars) / max(1, sum(contextChars))`（基于 `index.query.executed` 事件窗口聚合）。
+- 单次查询：`tokenROI = retrievedChars / max(1, contextChars)`；事件 payload 中同时记录 `contextChars`、`retrievedChars`、`contextTokens`（字符估 token）、`tokenROI`。
+- 目标（阶段性）：
+  - Phase A：>= 0.15（layered 相对 legacy 有提升即可观测）
+  - Phase B：>= 0.25
+  - Phase C：>= 0.35
+- 说明：测试用例应体现**关联性**（如多词 query、标签/领域过滤）与**复杂性**（如分层索引、图扩展），以验证该指标在真实场景下的代表性。
+
 ## 02. 辅助指标
 
 - Dangling Link 数（越低越好）
@@ -69,6 +80,11 @@ M3 Governance Pass Rate:
 - change vs last week: +x%
 - note:
 
+M4 Token ROI:
+- value: x.xxxx (retrievedChars/contextChars)
+- change vs last week: +x.xx
+- note:
+
 Top Risks:
 1) ...
 2) ...
@@ -82,4 +98,4 @@ Next Week Focus:
 
 - 指标是“方向盘”，不是“考核 KPI”。
 - 优先看趋势，不只看单点绝对值。
-- 当指标冲突时，优先级建议：治理通过率 > 命中率 > 沉淀率。
+- 当指标冲突时，优先级建议：治理通过率 > 命中率 > Token ROI > 沉淀率。

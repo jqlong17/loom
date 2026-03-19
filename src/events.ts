@@ -4,6 +4,8 @@ import * as path from "path";
 export type LoomEventType =
   | "knowledge.ingested"
   | "knowledge.traced"
+  | "index.rebuilt"
+  | "index.query.executed"
   | "probe.started"
   | "probe.committed"
   | "doctor.executed"
@@ -82,6 +84,8 @@ export interface EventReplayState {
   ingestedCount: number;
   traceCount: number;
   traceHitCount: number;
+  indexRebuiltCount: number;
+  indexQueryCount: number;
   probeStartedCount: number;
   probeCommittedCount: number;
   doctorRunCount: number;
@@ -95,6 +99,8 @@ export function replayEvents(events: LoomEvent[]): EventReplayState {
     ingestedCount: 0,
     traceCount: 0,
     traceHitCount: 0,
+    indexRebuiltCount: 0,
+    indexQueryCount: 0,
     probeStartedCount: 0,
     probeCommittedCount: 0,
     doctorRunCount: 0,
@@ -112,6 +118,12 @@ export function replayEvents(events: LoomEvent[]): EventReplayState {
         if (((event.payload as { count?: number }).count ?? 0) > 0) {
           state.traceHitCount++;
         }
+        break;
+      case "index.rebuilt":
+        state.indexRebuiltCount++;
+        break;
+      case "index.query.executed":
+        state.indexQueryCount++;
         break;
       case "probe.started":
         state.probeStartedCount++;
