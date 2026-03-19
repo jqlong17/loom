@@ -16,10 +16,10 @@
 
 ### 已知缺口（Open Gaps）
 
-- [ ] `loom events` 查询命令（事件可读性不足）
-- [ ] `loom metrics report` 周报草稿命令（决策层可读输出缺失）
-- [ ] 事件流回放测试（缺少时序回归保障）
-- [ ] PR 模板加入“指标影响 + 验证数据”字段
+- [x] `loom events` 查询命令（事件可读性不足）
+- [x] `loom metrics report` 周报草稿命令（决策层可读输出缺失）
+- [x] 事件流回放测试（缺少时序回归保障）
+- [x] PR 模板加入“指标影响 + 验证数据”字段
 
 ## 1) P0（最高优先级）：发布与分发（面向 OpenCode 用户）
 
@@ -34,10 +34,10 @@
 
 目标：让“有事件”变成“可读结论 + 可执行决策”。
 
-- [ ] `loom events`：支持 `--type --since --limit --json`
-- [ ] `loom metrics report`：按周生成文字周报草稿（引用 snapshot）
-- [ ] snapshot 与 `docs/METRICS.md` 的 M1/M2/M3 字段一一映射
-- [ ] PR 模板新增指标影响字段，并在 CI 中做最小校验（warn 即可）
+- [x] `loom events`：支持 `--type --since --limit --json`
+- [x] `loom metrics report`：按周生成文字周报草稿（引用 snapshot）
+- [x] snapshot 与 `docs/METRICS.md` 的 M1/M2/M3 字段一一映射
+- [x] PR 模板新增指标影响字段，并在 CI 中做最小校验（warn 即可）
 
 ## 3) P2：治理与架构抽象
 

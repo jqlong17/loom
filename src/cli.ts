@@ -21,7 +21,10 @@ import { executeStartProbeSession } from "./app/usecases/start-probe-session.js"
 import { executeCommitProbeSession } from "./app/usecases/commit-probe-session.js";
 import { executeUpdateChangelog } from "./app/usecases/update-changelog.js";
 import { executeMetricsSnapshot } from "./app/usecases/metrics-snapshot.js";
+import { executeQueryEvents } from "./app/usecases/query-events.js";
+import { executeMetricsReport } from "./app/usecases/metrics-report.js";
 import { formatDoctorPayload } from "./adapters/doctor-adapter.js";
+import { appendEvent } from "./events.js";
 
 type ArgMap = Record<string, string | boolean>;
 
@@ -122,6 +125,8 @@ Commands:
   probe-start --context <text> [--goal <text>] [--maxQuestions 3]
   probe-commit [--sessionId <id>] [--context <text>] [--goal <text>] [--maxQuestions 3] --answers '<json-array>' [--title <t>] [--tags a,b] [--commit true|false]
   metrics-snapshot [--snapshotDate YYYY-MM-DD] [--staleDays 30] [--includeThreads true|false] [--maxFindings 200] [--failOn none|error|warn]
+  metrics-report [--since YYYY-MM-DD] [--limit 500] [--reportDate YYYY-MM-DD]
+  events [--type eventType] [--since YYYY-MM-DD] [--limit 50] [--order asc|desc]
   closeout --title <t> --content <text> [--category threads|concepts] [--tags a,b] [--mode append|replace|section]
   trace --query <text> [--category <c>] [--tags a,b] [--limit n]
   read --category <c> --slug <filename-without-md>
@@ -336,6 +341,16 @@ async function main(): Promise<void> {
         tags: asList(args, "tags"),
         limit: asNumber(args, "limit"),
       });
+      await appendEvent(loomRoot, {
+        type: "knowledge.traced",
+        ts: new Date().toISOString(),
+        payload: {
+          query,
+          category: asString(args, "category"),
+          tags: asList(args, "tags"),
+          count: results.length,
+        },
+      });
       print({ ok: true, count: results.length, results }, jsonMode);
       return;
     }
@@ -502,6 +517,65 @@ async function main(): Promise<void> {
           ok: true,
           ...output.data,
           artifacts: output.artifacts,
+        },
+        jsonMode,
+      );
+      return;
+    }
+
+    case "metrics-report": {
+      const output = await executeMetricsReport({
+        loomRoot,
+        command: {
+          since: asString(args, "since"),
+          limit: asNumber(args, "limit"),
+          reportDate: asString(args, "reportDate"),
+        },
+      });
+      if (!output.ok || !output.data) {
+        fail("metrics report failed");
+      }
+      print(
+        jsonMode
+          ? { ok: true, ...output.data }
+          : output.data.reportMarkdown,
+        jsonMode,
+      );
+      return;
+    }
+
+    case "events": {
+      const type = asString(args, "type");
+      const order = (asString(args, "order") ?? "desc").toLowerCase();
+      if (!["asc", "desc"].includes(order)) {
+        fail("events --order must be asc|desc");
+      }
+      const output = await executeQueryEvents({
+        loomRoot,
+        command: {
+          type: type as
+            | "knowledge.ingested"
+            | "knowledge.traced"
+            | "probe.started"
+            | "probe.committed"
+            | "doctor.executed"
+            | "changelog.updated"
+            | "metrics.snapshot.generated"
+            | undefined,
+          since: asString(args, "since"),
+          limit: asNumber(args, "limit") ?? 50,
+          order: order as "asc" | "desc",
+        },
+      });
+      if (!output.ok || !output.data) {
+        fail("events query failed");
+      }
+      print(
+        {
+          ok: true,
+          total: output.data.total,
+          counts: output.data.counts,
+          events: output.data.events,
         },
         jsonMode,
       );

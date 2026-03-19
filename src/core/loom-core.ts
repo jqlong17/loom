@@ -7,6 +7,7 @@ import {
   collectDailyHighlightsFromGit,
   updateChangelog,
 } from "../changelog.js";
+import { mapReflectIssueToQualityIssue } from "../domain/quality-issue.js";
 
 export interface IngestInput {
   category: LoomCategory;
@@ -53,13 +54,6 @@ export interface DoctorResult {
     warnCount: number;
   };
   issues: Array<ReflectIssue & { level: "error" | "warn" }>;
-}
-
-function classifyIssueLevel(issue: ReflectIssue): "error" | "warn" {
-  if (issue.type === "conflict" || issue.type === "dangling_link") {
-    return "error";
-  }
-  return "warn";
 }
 
 export async function ingestKnowledge(params: {
@@ -159,7 +153,7 @@ export async function runDoctor(params: {
 
   const issues = report.issues.map((i) => ({
     ...i,
-    level: classifyIssueLevel(i),
+    level: mapReflectIssueToQualityIssue(i).level,
   }));
   const errorCount = issues.filter((i) => i.level === "error").length;
   const warnCount = issues.filter((i) => i.level === "warn").length;

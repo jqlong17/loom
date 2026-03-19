@@ -55,6 +55,12 @@ export async function executeMetricsSnapshot(params: {
   const entries = await listAll(params.loomRoot);
   const probes = await countProbeSessions(params.loomRoot);
   const events = await readEvents(params.loomRoot);
+  const ingestedEvents = events.filter((e) => e.type === "knowledge.ingested");
+  const tracedEvents = events.filter((e) => e.type === "knowledge.traced");
+  const tracedHits = tracedEvents.filter(
+    (e) => ((e.payload as { count?: number }).count ?? 0) > 0,
+  );
+  const probeStartedEvents = events.filter((e) => e.type === "probe.started");
 
   const doctorEvents = events.filter((e) => e.type === "doctor.executed");
   const doctorPassed = doctorEvents.filter((e) => {
@@ -67,6 +73,15 @@ export async function executeMetricsSnapshot(params: {
       : doctor.shouldFail
         ? 0
         : 1;
+  const captureRate = Number(
+    (
+      ingestedEvents.length /
+      Math.max(ingestedEvents.length + probeStartedEvents.length, 1)
+    ).toFixed(4),
+  );
+  const retrievalHitRate = Number(
+    (tracedHits.length / Math.max(tracedEvents.length, 1)).toFixed(4),
+  );
 
   const byCategory = entries.reduce<Record<string, number>>((acc, item) => {
     acc[item.category] = (acc[item.category] ?? 0) + 1;
@@ -91,6 +106,8 @@ export async function executeMetricsSnapshot(params: {
     schema: "metrics.snapshot.v1" as const,
     generatedAt: new Date().toISOString(),
     metrics: {
+      captureRate,
+      retrievalHitRate,
       governancePassRate,
       danglingLinkCount,
       isolatedNodeCount,

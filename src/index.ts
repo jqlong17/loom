@@ -41,7 +41,10 @@ import { executeStartProbeSession } from "./app/usecases/start-probe-session.js"
 import { executeCommitProbeSession } from "./app/usecases/commit-probe-session.js";
 import { executeUpdateChangelog } from "./app/usecases/update-changelog.js";
 import { executeMetricsSnapshot } from "./app/usecases/metrics-snapshot.js";
+import { executeQueryEvents } from "./app/usecases/query-events.js";
+import { executeMetricsReport } from "./app/usecases/metrics-report.js";
 import { formatDoctorForMcp } from "./adapters/doctor-adapter.js";
+import { appendEvent } from "./events.js";
 
 const WORK_DIR = process.env.LOOM_WORK_DIR ?? process.cwd();
 const SERVER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -620,6 +623,16 @@ server.tool(
     const { loomRoot } = await getRuntimeContext();
 
     const results = await trace(loomRoot, query, { category, tags, limit });
+    await appendEvent(loomRoot, {
+      type: "knowledge.traced",
+      ts: new Date().toISOString(),
+      payload: {
+        query,
+        category,
+        tags,
+        count: results.length,
+      },
+    });
 
     if (results.length === 0) {
       return {
@@ -1160,6 +1173,92 @@ server.tool(
               filePath: output.data.filePath,
               snapshot: output.data.snapshot,
               artifacts: output.artifacts,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  },
+);
+
+// ─── Tool: loom_metrics_report ─────────────────────────────────
+server.tool(
+  "loom_metrics_report",
+  "Generate a weekly-style metrics report draft from events and latest snapshots.",
+  {
+    since: z.string().optional().describe("Only include events since YYYY-MM-DD"),
+    limit: z.number().optional().describe("Max number of events to analyze"),
+    report_date: z.string().optional().describe("Report date label YYYY-MM-DD"),
+  },
+  async ({ since, limit, report_date }) => {
+    const { loomRoot } = await getRuntimeContext();
+    await ensureLoomStructure(loomRoot);
+    const output = await executeMetricsReport({
+      loomRoot,
+      command: {
+        since,
+        limit,
+        reportDate: report_date,
+      },
+    });
+    if (!output.ok || !output.data) {
+      return {
+        content: [{ type: "text", text: "Failed to generate metrics report." }],
+      };
+    }
+    return {
+      content: [{ type: "text", text: output.data.reportMarkdown }],
+    };
+  },
+);
+
+// ─── Tool: loom_events ─────────────────────────────────────────
+server.tool(
+  "loom_events",
+  "Query Loom append-only event stream with type/since/limit filters.",
+  {
+    type: z
+      .enum([
+        "knowledge.ingested",
+        "knowledge.traced",
+        "probe.started",
+        "probe.committed",
+        "doctor.executed",
+        "changelog.updated",
+        "metrics.snapshot.generated",
+      ])
+      .optional(),
+    since: z.string().optional().describe("Only include events since YYYY-MM-DD"),
+    limit: z.number().optional().describe("Maximum events to return"),
+    order: z.enum(["asc", "desc"]).optional(),
+  },
+  async ({ type, since, limit, order }) => {
+    const { loomRoot } = await getRuntimeContext();
+    await ensureLoomStructure(loomRoot);
+    const output = await executeQueryEvents({
+      loomRoot,
+      command: {
+        type,
+        since,
+        limit: limit ?? 50,
+        order: order ?? "desc",
+      },
+    });
+    if (!output.ok || !output.data) {
+      return { content: [{ type: "text", text: "Failed to query events." }] };
+    }
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              ok: true,
+              total: output.data.total,
+              counts: output.data.counts,
+              events: output.data.events,
             },
             null,
             2,

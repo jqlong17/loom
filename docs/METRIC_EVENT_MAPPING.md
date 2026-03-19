@@ -16,6 +16,7 @@
 | 事件 type | 触发点 | 主要字段 | 指标用途 |
 | --- | --- | --- | --- |
 | `knowledge.ingested` | `ingest/weave` 成功后 | `category`, `filePath`, `isUpdate` | 统计沉淀速度、类别分布 |
+| `knowledge.traced` | 执行 `trace` 检索后 | `query`, `count`, `category`, `tags` | 计算检索命中代理指标（M2） |
 | `probe.started` | 创建主动提问 session | `sessionId`, `questionCount` | 统计主动澄清触发率 |
 | `probe.committed` | 回答提交并写入记忆后 | `sessionId`, `matched`, `unmatched` | 计算提问闭环率、回答匹配质量 |
 | `doctor.executed` | 运行治理检查后 | `shouldFail`, `summary` | 计算治理通过率（M3） |
@@ -24,6 +25,12 @@
 
 ## 当前快照规则（MVP）
 
+- `captureRate`（M1）：
+  - 基于事件流近似计算：`knowledge.ingested / (knowledge.ingested + probe.started)`。
+  - 说明：作为“对话到沉淀”代理值，后续可替换为更精确口径。
+- `retrievalHitRate`（M2）：
+  - 基于事件流近似计算：`knowledge.traced(count>0) / knowledge.traced(total)`。
+  - 说明：以 trace 命中作为“检索命中且被引用”的早期代理值。
 - `governancePassRate`：
   - 优先使用历史 `doctor.executed` 事件中 `shouldFail=false` 的比例。
   - 若历史为空，则回退到本次 doctor 结果（通过=1，失败=0）。

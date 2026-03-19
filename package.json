@@ -18,6 +18,9 @@
     "test:coverage": "vitest run --coverage",
     "test:regression": "bash -lc 'set -o pipefail; mkdir -p .test-logs; vitest run --coverage --reporter=verbose 2>&1 | tee .test-logs/latest.log'",
     "prepublishOnly": "npm run build && npm run test",
+    "release:patch": "npm version patch && git push --follow-tags",
+    "release:minor": "npm version minor && git push --follow-tags",
+    "release:major": "npm version major && git push --follow-tags",
     "changelog:auto": "tsx scripts/changelog-auto.ts",
     "cli": "node dist/cli.js",
     "hooks:install": "bash scripts/hooks-install.sh"

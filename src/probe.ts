@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { commitSessionState } from "./domain/probe-session.js";
 
 export interface ProbeQuestion {
   id: string;
@@ -140,11 +141,18 @@ export async function commitProbeSession(
     );
   }
 
+  const at = nowIso();
+  const state = commitSessionState(
+    {
+      status: session.status,
+      updatedAt: session.updatedAt,
+      committedAt: session.committedAt,
+    },
+    at,
+  );
   const next: ProbeSession = {
     ...session,
-    status: "committed",
-    committedAt: nowIso(),
-    updatedAt: nowIso(),
+    ...state,
     answers: matched,
   };
 

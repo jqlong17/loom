@@ -1,0 +1,30 @@
+name: PR Metrics Hint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  metrics-hint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR body for metrics fields
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          BODY="${PR_BODY:-}"
+          HAS_METRICS=false
+          HAS_VALIDATION=false
+
+          if printf "%s" "$BODY" | grep -qi "metrics impact\|指标影响\|m1\|m2\|m3"; then
+            HAS_METRICS=true
+          fi
+          if printf "%s" "$BODY" | grep -qi "validation data\|验证数据\|test\|build"; then
+            HAS_VALIDATION=true
+          fi
+
+          if [ "$HAS_METRICS" = false ] || [ "$HAS_VALIDATION" = false ]; then
+            echo "::warning::PR description is missing Metrics Impact or Validation Data. Please update the PR template fields."
+          else
+            echo "PR includes metrics and validation context."
+          fi

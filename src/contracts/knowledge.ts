@@ -1,6 +1,7 @@
 import type { LoomCategory } from "../config.js";
 import type { ReflectIssue } from "../weaver.js";
 import type { ProbeAnswerInput, ProbeQuestion } from "../probe.js";
+import type { LoomEvent, LoomEventType } from "../events.js";
 
 export interface IngestCommand {
   category: LoomCategory;
@@ -129,6 +130,8 @@ export interface MetricsSnapshotOutcome {
     schema: "metrics.snapshot.v1";
     generatedAt: string;
     metrics: {
+      captureRate: number;
+      retrievalHitRate: number;
       governancePassRate: number;
       danglingLinkCount: number;
       isolatedNodeCount: number;
@@ -143,5 +146,38 @@ export interface MetricsSnapshotOutcome {
       };
       events: Record<string, number>;
     };
+  };
+}
+
+export interface EventsQueryCommand {
+  type?: LoomEventType;
+  since?: string;
+  limit?: number;
+  order?: "asc" | "desc";
+}
+
+export interface EventsQueryOutcome {
+  total: number;
+  counts: Record<string, number>;
+  events: LoomEvent[];
+}
+
+export interface MetricsReportCommand {
+  since?: string;
+  limit?: number;
+  reportDate?: string;
+}
+
+export interface MetricsReportOutcome {
+  reportMarkdown: string;
+  summary: {
+    m1CaptureRate: number;
+    m2RetrievalHitRate: number;
+    m3GovernancePassRate: number;
+  };
+  basedOn: {
+    events: number;
+    since?: string;
+    latestSnapshot?: string;
   };
 }

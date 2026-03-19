@@ -4,7 +4,7 @@
 
 **将转瞬即逝的 AI 对话，编织成可持续演进的系统记忆。**
 
-Loom 是一个 MCP（Model Context Protocol）服务器，用来把你和 AI 的对话沉淀为结构化、可版本管理的 Markdown 知识库。它本地运行，复用编辑器自带 AI（不需要额外 API Key），并可通过 Git 实现团队协作。
+Loom 是一个 **CLI-first** 的长期记忆系统，并兼容 MCP（Model Context Protocol）安装方式。它用来把你和 AI 的对话沉淀为结构化、可版本管理的 Markdown 知识库；本地运行、复用编辑器自带 AI（不需要额外 API Key），并可通过 Git 实现团队协作。
 
 > npm 包名：`loom-memory`（产品名仍为 Loom）。
 
@@ -18,6 +18,28 @@ Loom 会把这些知识自动留下来：
 - **零额外模型成本**：直接使用 Cursor / VS Code Copilot / Claude Code / OpenCode / Codex 等宿主 AI 能力
 - **Git 原生**：每次知识更新都可追踪，支持多人协作维护
 - **人类可读可改**：纯 Markdown 文件，和代码一样可审查、可编辑
+
+### 记忆什么时候会被保存？
+
+你可以把 Loom 理解成“关键节点记忆系统”，不是把所有聊天原样录音，而是在有价值的时刻进行沉淀。
+
+- 当你和 AI 明确形成了结论（例如方案、决策、边界、复盘）时，会触发记忆写入。
+- 当你执行收口动作（如 `ingest` / `closeout`）时，会把这次产出结构化保存。
+- 当你做澄清问答（`probe`）并提交答案时，会把“问题-答案-依据”一起沉淀。
+
+### 这个记忆系统有什么特点？
+
+对非技术同学：
+
+- **该记的时候才记**：减少噪音，保留真正有用的信息。
+- **看得懂、改得了**：记忆就是 Markdown 文档，不是黑盒数据库。
+- **能回看来龙去脉**：每次更新都有记录，后续追溯更容易。
+
+对技术同学：
+
+- **CLI-first，MCP 兼容**：既可脚本化自动执行，也可在对话中调用。
+- **Git 原生可审计**：记忆变更可 diff、可 review、可回滚。
+- **有治理和指标闭环**：支持 doctor、events、metrics snapshot/report，能把“记忆质量”变成可观测与可改进的工程信号。
 
 ## 快速开始
 
@@ -34,7 +56,7 @@ loom-cli help
 ### 1.1 从源码构建（开发者）
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/jqlong17/loom
 cd loom
 npm install
 npm run build
@@ -374,11 +396,13 @@ node dist/cli.js doctor --failOn error --json
 | `loom_probe` | 主动提问与回写记忆（同一工具支持 start/commit 两阶段） |
 | `loom_changelog` | 维护公开 CHANGELOG（按日期聚合核心变更） |
 | `loom_metrics_snapshot` | 生成指标快照 JSON（治理通过率与辅助指标） |
+| `loom_metrics_report` | 生成指标周报草稿（用于复盘与决策） |
+| `loom_events` | 查询事件流（支持 type/since/limit/order） |
 | `loom_upgrade` | 升级 Loom MCP 安装本体（从 GitHub 拉取最新） |
 
 ## CLI 命令列表（`node dist/cli.js <command>`）
 
-`init`、`weave`、`ingest`、`probe-start`、`probe-commit`、`metrics-snapshot`、`closeout`、`trace`、`read`、`list`、`deprecate`、`reflect`、`doctor`、`sync`、`log`、`changelog`、`upgrade`
+`init`、`weave`、`ingest`、`probe-start`、`probe-commit`、`metrics-snapshot`、`metrics-report`、`events`、`closeout`、`trace`、`read`、`list`、`deprecate`、`reflect`、`doctor`、`sync`、`log`、`changelog`、`upgrade`
 
 ## 知识分类
 
@@ -455,6 +479,7 @@ Loom 的知识库本质上就是 Git 仓库里的一组 Markdown 文件，多人
 - `docs/IMPLEMENTATION_PLAN.md`：可执行任务清单（逐项打勾）
 - `docs/BRAINSTORM.md`：脑爆创意池（想法先沉淀再转 roadmap）
 - `docs/METRICS.md`：北极星指标与周度追踪模板（判断方向是否有效）
+- `docs/ARCHITECTURE.md`：全局技术架构图（非技术/技术双层 + Tool 能力映射）
 
 建议协作方式：
 
@@ -512,7 +537,18 @@ npm run test:regression # 生成可复现测试日志：.test-logs/latest.log
 npm run changelog:auto  # 自动更新当天 CHANGELOG 核心变更
 npm run cli -- help  # 查看 CLI Wrapper 命令
 npm run hooks:install  # 安装 post-commit 自动更新 hook
+npm run release:patch # patch 发版（创建 tag 并 push，触发自动发布）
+npm run release:minor # minor 发版
+npm run release:major # major 发版
 ```
+
+## npm 自动发布（Trusted Publishing）
+
+- 工作流：`.github/workflows/release-npm.yml`
+- 触发：push `v*` tag（例如 `v0.1.1`）
+- 发布方式：GitHub OIDC Trusted Publishing（无需仓库保存 `NPM_TOKEN`、无需每次 OTP）
+
+一次性配置与细节见：`docs/RELEASE_AUTOMATION.md`
 
 ## 贡献 PR 建议流程
 

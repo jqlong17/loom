@@ -2,7 +2,7 @@
 
 **Weaving ephemeral AI chats into a persistent system mind.**
 
-Loom is an MCP (Model Context Protocol) server that turns your AI conversations into a structured, version-controlled Markdown knowledge base. It runs locally, uses your editor's built-in AI (no API key needed), and syncs via Git for team collaboration.
+Loom is a **CLI-first** long-term memory system, with compatible MCP (Model Context Protocol) installation support. It turns your AI conversations into a structured, version-controlled Markdown knowledge base; runs locally, uses your editor's built-in AI (no API key needed), and syncs via Git for team collaboration.
 
 > npm package name: `loom-memory` (product name remains Loom).
 
@@ -32,7 +32,7 @@ loom-cli help
 ### 1.1 Build from source (for contributors)
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/jqlong17/loom
 cd loom
 npm install
 npm run build
@@ -368,11 +368,13 @@ This avoids logic drift between CLI and MCP paths and improves long-term regress
 | `loom_probe` | Active inquiry + memory persistence (same tool for start/commit) |
 | `loom_changelog` | Maintain public CHANGELOG grouped by day-level core changes |
 | `loom_metrics_snapshot` | Generate metrics snapshot JSON for governance and auxiliary metrics |
+| `loom_metrics_report` | Generate weekly metrics report draft for review and decisions |
+| `loom_events` | Query append-only event stream with filters |
 | `loom_upgrade` | Upgrade Loom MCP installation itself from GitHub |
 
 ## CLI Commands (`node dist/cli.js <command>`)
 
-`init`, `weave`, `ingest`, `probe-start`, `probe-commit`, `metrics-snapshot`, `closeout`, `trace`, `read`, `list`, `deprecate`, `reflect`, `doctor`, `sync`, `log`, `changelog`, `upgrade`
+`init`, `weave`, `ingest`, `probe-start`, `probe-commit`, `metrics-snapshot`, `metrics-report`, `events`, `closeout`, `trace`, `read`, `list`, `deprecate`, `reflect`, `doctor`, `sync`, `log`, `changelog`, `upgrade`
 
 ## Knowledge Categories
 
@@ -449,6 +451,7 @@ To keep Loom direction visible, long-term, and continuously evolvable, the repo 
 - `docs/IMPLEMENTATION_PLAN.md`: executable checklist for incremental delivery
 - `docs/BRAINSTORM.md`: idea backlog for early-stage proposals
 - `docs/METRICS.md`: north-star metrics and weekly tracking template
+- `docs/ARCHITECTURE.md`: global architecture diagrams (non-technical + technical + tool capability mapping)
 
 Suggested collaboration flow:
 
@@ -469,7 +472,18 @@ npm run test:coverage   # Run coverage checks with thresholds
 npm run test:regression # Produce reproducible logs at .test-logs/latest.log
 npm run changelog:auto  # Auto-update today's core changelog section
 npm run cli -- help  # Show CLI Wrapper commands
+npm run release:patch # Patch release (create tag + push; triggers auto publish)
+npm run release:minor # Minor release
+npm run release:major # Major release
 ```
+
+## npm Auto Publish (Trusted Publishing)
+
+- Workflow: `.github/workflows/release-npm.yml`
+- Trigger: push tag `v*` (for example `v0.1.1`)
+- Publish mode: GitHub OIDC Trusted Publishing (no repo `NPM_TOKEN`, no per-release OTP)
+
+One-time setup and details: `docs/RELEASE_AUTOMATION.md`
 
 ## PR Contribution Workflow
 

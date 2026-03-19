@@ -3,6 +3,7 @@ import * as path from "path";
 
 export type LoomEventType =
   | "knowledge.ingested"
+  | "knowledge.traced"
   | "probe.started"
   | "probe.committed"
   | "doctor.executed"
@@ -39,4 +40,100 @@ export async function readEvents(
   } catch {
     return [];
   }
+}
+
+export interface QueryEventsInput {
+  type?: LoomEventType;
+  since?: string;
+  limit?: number;
+  order?: "asc" | "desc";
+}
+
+export function queryEvents(
+  events: LoomEvent[],
+  input: QueryEventsInput,
+): LoomEvent[] {
+  const sinceTs = input.since ? Date.parse(input.since) : undefined;
+  let result = events.filter((event) => {
+    if (input.type && event.type !== input.type) return false;
+    if (sinceTs !== undefined) {
+      const ts = Date.parse(event.ts);
+      if (Number.isFinite(ts) && ts < sinceTs) return false;
+    }
+    return true;
+  });
+  if ((input.order ?? "desc") === "desc") {
+    result = [...result].reverse();
+  }
+  if (input.limit && input.limit > 0) {
+    result = result.slice(0, input.limit);
+  }
+  return result;
+}
+
+export function summarizeEventCounts(events: LoomEvent[]): Record<string, number> {
+  return events.reduce<Record<string, number>>((acc, event) => {
+    acc[event.type] = (acc[event.type] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+export interface EventReplayState {
+  ingestedCount: number;
+  traceCount: number;
+  traceHitCount: number;
+  probeStartedCount: number;
+  probeCommittedCount: number;
+  doctorRunCount: number;
+  doctorPassCount: number;
+  changelogCount: number;
+  snapshotCount: number;
+}
+
+export function replayEvents(events: LoomEvent[]): EventReplayState {
+  const state: EventReplayState = {
+    ingestedCount: 0,
+    traceCount: 0,
+    traceHitCount: 0,
+    probeStartedCount: 0,
+    probeCommittedCount: 0,
+    doctorRunCount: 0,
+    doctorPassCount: 0,
+    changelogCount: 0,
+    snapshotCount: 0,
+  };
+  for (const event of events) {
+    switch (event.type) {
+      case "knowledge.ingested":
+        state.ingestedCount++;
+        break;
+      case "knowledge.traced":
+        state.traceCount++;
+        if (((event.payload as { count?: number }).count ?? 0) > 0) {
+          state.traceHitCount++;
+        }
+        break;
+      case "probe.started":
+        state.probeStartedCount++;
+        break;
+      case "probe.committed":
+        state.probeCommittedCount++;
+        break;
+      case "doctor.executed":
+        state.doctorRunCount++;
+        if ((event.payload as { shouldFail?: boolean }).shouldFail === false) {
+          state.doctorPassCount++;
+        }
+        break;
+      case "changelog.updated":
+        state.changelogCount++;
+        break;
+      case "metrics.snapshot.generated":
+        state.snapshotCount++;
+        break;
+      default:
+        break;
+    }
+  }
+  return state;
 }

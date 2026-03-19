@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as fs from "fs/promises";
 import { describe, expect, it } from "vitest";
 import { ensureLoomStructure, type LoomConfig } from "../src/config.js";
 import { GitManager } from "../src/git-manager.js";
@@ -8,6 +9,7 @@ import { executeStartProbeSession } from "../src/app/usecases/start-probe-sessio
 import { executeCommitProbeSession } from "../src/app/usecases/commit-probe-session.js";
 import { executeUpdateChangelog } from "../src/app/usecases/update-changelog.js";
 import { executeMetricsSnapshot } from "../src/app/usecases/metrics-snapshot.js";
+import { appendEvent } from "../src/events.js";
 import { makeTempDir } from "./test-utils.js";
 
 const TEST_CONFIG: LoomConfig = {
@@ -138,5 +140,39 @@ describe("application usecases", () => {
     expect(snapshot.ok).toBe(true);
     expect(snapshot.data?.snapshot.schema).toBe("metrics.snapshot.v1");
     expect(snapshot.data?.filePath.endsWith(".json")).toBe(true);
+    expect(snapshot.data?.snapshot.metrics.captureRate).toBeGreaterThanOrEqual(0);
+    expect(snapshot.data?.snapshot.metrics.retrievalHitRate).toBeGreaterThanOrEqual(0);
+  });
+
+  it("metrics snapshot aggregates doctor and probe data branches", async () => {
+    const workDir = await makeTempDir("loom-usecase-");
+    const loomRoot = path.join(workDir, ".loom");
+    await ensureLoomStructure(loomRoot);
+
+    await fs.mkdir(path.join(loomRoot, "probes"), { recursive: true });
+    await fs.writeFile(
+      path.join(loomRoot, "probes", "probe-test.json"),
+      JSON.stringify({ status: "committed" }),
+      "utf-8",
+    );
+    await appendEvent(loomRoot, {
+      type: "doctor.executed",
+      ts: "2026-03-19T00:00:00.000Z",
+      payload: { shouldFail: false },
+    });
+
+    const snapshot = await executeMetricsSnapshot({
+      loomRoot,
+      command: {
+        failOn: "none",
+        staleDays: 30,
+        includeThreads: true,
+        maxFindings: 50,
+      },
+    });
+    expect(snapshot.ok).toBe(true);
+    expect(snapshot.data?.snapshot.metrics.governancePassRate).toBeGreaterThan(0);
+    expect(snapshot.data?.snapshot.metrics.probeCompletionRate).toBe(1);
+    expect(snapshot.data?.snapshot.metrics.captureRate).toBe(0);
   });
 });
