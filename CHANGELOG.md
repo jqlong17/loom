@@ -39,7 +39,7 @@
 - 新增 `loom_events` / `loom_metrics_report` 与事件回放测试，并补齐 `metrics.snapshot.v1` 的 M1/M2/M3 映射，目的是把“事件采集”升级为“可复盘、可决策”的数据闭环。
 - 新增 GitHub Actions `release-npm.yml` 与 Trusted Publishing 发布流程（tag 触发），目的是让 npm 发布摆脱手工 OTP 流程并实现稳定自动化发版。
 
-## 2026-03-22
+## 2026-03-20
 
 - 新增 **MCP 读路径有界化**：`.loomrc.json` 中 `mcpReadLimits`（`listMaxEntries` / `traceDefaultLimit` / `indexFullMaxChars`）及环境变量 `LOOM_MCP_*` 覆盖，目的是在默认参数下控制单次 tool 返回体积并降低上下文污染与 Token 成本。
 - **`loom_list`**：按 `updated` 新近优先展示，默认条数上限（截断时提示总数与本次条数），目的是大盘知识库下仍能安全做条目概览。
