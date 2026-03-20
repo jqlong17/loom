@@ -36,6 +36,7 @@
   "license": "MIT",
   "files": [
     "dist",
+    "prompts",
     "README.md",
     "README.en.md",
     "CHANGELOG.md",

@@ -19,6 +19,10 @@ export interface LoomConfig {
     redact: boolean;
     maxPayloadChars: number;
   };
+  /** MCP 提示词版本目录名，如 v1、v2（见 prompts/<locale>/<version>/） */
+  promptVersion: string;
+  /** 预留：zh | en */
+  promptLocale: string;
 }
 
 const DEFAULT_CONFIG: LoomConfig = {
@@ -33,6 +37,8 @@ const DEFAULT_CONFIG: LoomConfig = {
     redact: true,
     maxPayloadChars: 12000,
   },
+  promptVersion: "v1",
+  promptLocale: "zh",
 };
 
 const CONFIG_FILE = ".loomrc.json";
@@ -49,6 +55,8 @@ export async function loadConfig(workDir: string): Promise<LoomConfig> {
         ...DEFAULT_CONFIG.fullConversationLogging,
         ...(userConfig.fullConversationLogging ?? {}),
       },
+      promptVersion: userConfig.promptVersion ?? DEFAULT_CONFIG.promptVersion,
+      promptLocale: userConfig.promptLocale ?? DEFAULT_CONFIG.promptLocale,
     };
   } catch {
     return { ...DEFAULT_CONFIG };

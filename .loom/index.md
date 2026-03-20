@@ -1,6 +1,6 @@
 ---
-updated: 2026-03-19T05:52:02.382Z
-total_entries: 11
+updated: 2026-03-20T06:30:36.899Z
+total_entries: 12
 ---
 
 # Loom System Index
@@ -16,6 +16,7 @@ total_entries: 11
 
 ## Decisions
 
+- [MCP 与 CLI 提示词来源保持分离](decisions/mcp-and-cli-prompt-sources-kept-separate.md) — tags: decision, prompts, mcp, cli, documentation — updated: 2026-03-18T00:00:00.000Z
 - [Why Markdown Plus Git As Storage](decisions/why-markdown-plus-git-as-storage.md) — tags: decision, storage, markdown, git — updated: 2026-03-18T14:53:04.994Z
 - [Why MCP Over VS Code Plugin](decisions/why-mcp-over-vs-code-plugin.md) — tags: decision, mcp, architecture, vs-code — updated: 2026-03-18T14:52:56.309Z
 - [Why The Name Loom](decisions/why-the-name-loom.md) — tags: decision, naming, branding — updated: 2026-03-18T14:53:15.029Z

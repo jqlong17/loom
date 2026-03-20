@@ -45,6 +45,7 @@ import { executeQueryEvents } from "./app/usecases/query-events.js";
 import { executeMetricsReport } from "./app/usecases/metrics-report.js";
 import { formatDoctorForMcp } from "./adapters/doctor-adapter.js";
 import { appendEvent } from "./events.js";
+import { loadPromptBundle, type LoadedPrompts } from "./prompt-loader.js";
 import {
   appendRawConversationRecord,
   inferSessionIdFromUnknown,
@@ -378,10 +379,14 @@ function enableMcpRawLogging(): void {
 
 enableMcpRawLogging();
 
+function registerLoomToolDefinitions(bundle: LoadedPrompts): void {
 // ─── Tool: loom_init ──────────────────────────────────────────
 server.tool(
   "loom_init",
-  "Initialize Loom knowledge base in the current project. Creates .loom/ directory structure with index, concepts, decisions, and threads folders.",
+  bundle.describeTool(
+    "loom_init",
+    "Initialize Loom knowledge base in the current project. Creates .loom/ directory structure with index, concepts, decisions, and threads folders.",
+  ),
   {},
   async () => {
     const { config, loomRoot } = await getRuntimeContext();
@@ -413,52 +418,87 @@ server.tool(
 // ─── Tool: loom_weave ─────────────────────────────────────────
 server.tool(
   "loom_weave",
-  "Weave a piece of knowledge into the Loom knowledge base. Use this whenever you learn something important about the system architecture, business logic, technical decisions, or discussion threads from conversations.",
+  bundle.describeTool(
+    "loom_weave",
+    "Weave a piece of knowledge into the Loom knowledge base. Use this whenever you learn something important about the system architecture, business logic, technical decisions, or discussion threads from conversations.",
+  ),
   {
     category: z
       .enum(["concepts", "decisions", "threads"])
       .describe(
-        "Knowledge category: 'concepts' for system architecture, business logic, terminology; 'decisions' for ADR-style records of why something was chosen; 'threads' for conversation summaries and discussion notes",
+        bundle.describeParam(
+          "loom_weave",
+          "category",
+          "Knowledge category: 'concepts' for system architecture, business logic, terminology; 'decisions' for ADR-style records of why something was chosen; 'threads' for conversation summaries and discussion notes",
+        ),
       ),
     title: z
       .string()
       .describe(
-        "A clear, descriptive title for this knowledge entry (e.g. 'Payment Flow', 'Why We Chose PostgreSQL')",
+        bundle.describeParam(
+          "loom_weave",
+          "title",
+          "A clear, descriptive title for this knowledge entry (e.g. 'Payment Flow', 'Why We Chose PostgreSQL')",
+        ),
       ),
     content: z
       .string()
       .describe(
-        "The knowledge content in Markdown format. Be thorough and structured.",
+        bundle.describeParam(
+          "loom_weave",
+          "content",
+          "The knowledge content in Markdown format. Be thorough and structured.",
+        ),
       ),
     tags: z
       .array(z.string())
       .optional()
       .describe(
-        "Optional tags for categorization and retrieval (e.g. ['backend', 'database', 'auth'])",
+        bundle.describeParam(
+          "loom_weave",
+          "tags",
+          "Optional tags for categorization and retrieval (e.g. ['backend', 'database', 'auth'])",
+        ),
       ),
     links: z
       .array(z.string())
       .optional()
       .describe(
-        "Optional graph links to related entries (e.g. ['concepts/user-auth', 'decisions/why-mcp-over-vs-code-plugin'])",
+        bundle.describeParam(
+          "loom_weave",
+          "links",
+          "Optional graph links to related entries (e.g. ['concepts/user-auth', 'decisions/why-mcp-over-vs-code-plugin'])",
+        ),
       ),
     domain: z
       .string()
       .optional()
       .describe(
-        "Optional macro domain for graph skeleton (e.g. 'architecture', 'product', 'operations')",
+        bundle.describeParam(
+          "loom_weave",
+          "domain",
+          "Optional macro domain for graph skeleton (e.g. 'architecture', 'product', 'operations')",
+        ),
       ),
     is_core: z
       .boolean()
       .optional()
       .describe(
-        "If true, force-add 'core' tag for foundational concepts that should be mandatory read.",
+        bundle.describeParam(
+          "loom_weave",
+          "is_core",
+          "If true, force-add 'core' tag for foundational concepts that should be mandatory read.",
+        ),
       ),
     mode: z
       .enum(["replace", "append", "section"])
       .optional()
       .describe(
-        "Write mode: 'replace' overwrites the entire entry (default); 'append' adds new content below existing content with a date separator; 'section' replaces a matching ## heading or appends as a new section",
+        bundle.describeParam(
+          "loom_weave",
+          "mode",
+          "Write mode: 'replace' overwrites the entire entry (default); 'append' adds new content below existing content with a date separator; 'section' replaces a matching ## heading or appends as a new section",
+        ),
       ),
   },
   async ({ category, title, content, tags, links, domain, mode, is_core }) => {
@@ -536,21 +576,50 @@ server.tool(
 // ─── Tool: loom_ingest ────────────────────────────────────────
 server.tool(
   "loom_ingest",
-  "CLI-first style one-shot ingestion: lint + weave + index (+ optional changelog/commit). MCP adapter over core ingest pipeline.",
+  bundle.describeTool(
+    "loom_ingest",
+    "CLI-first style one-shot ingestion: lint + weave + index (+ optional changelog/commit). MCP adapter over core ingest pipeline.",
+  ),
   {
-    category: z.enum(["concepts", "decisions", "threads"]),
-    title: z.string(),
-    content: z.string(),
-    tags: z.array(z.string()).optional(),
-    links: z.array(z.string()).optional(),
-    domain: z.string().optional(),
-    mode: z.enum(["replace", "append", "section"]).optional(),
-    commit: z.boolean().optional(),
-    changelog: z.boolean().optional(),
+    category: z
+      .enum(["concepts", "decisions", "threads"])
+      .describe(bundle.describeParam("loom_ingest", "category", "concepts | decisions | threads")),
+    title: z.string().describe(bundle.describeParam("loom_ingest", "title", "Entry title")),
+    content: z.string().describe(bundle.describeParam("loom_ingest", "content", "Markdown body")),
+    tags: z
+      .array(z.string())
+      .optional()
+      .describe(bundle.describeParam("loom_ingest", "tags", "Optional tags")),
+    links: z
+      .array(z.string())
+      .optional()
+      .describe(bundle.describeParam("loom_ingest", "links", "Optional related entry paths")),
+    domain: z
+      .string()
+      .optional()
+      .describe(bundle.describeParam("loom_ingest", "domain", "Optional domain")),
+    mode: z
+      .enum(["replace", "append", "section"])
+      .optional()
+      .describe(bundle.describeParam("loom_ingest", "mode", "replace | append | section")),
+    commit: z
+      .boolean()
+      .optional()
+      .describe(bundle.describeParam("loom_ingest", "commit", "Auto git commit (default true)")),
+    changelog: z
+      .boolean()
+      .optional()
+      .describe(bundle.describeParam("loom_ingest", "changelog", "Update public CHANGELOG (default false)")),
     changelogDate: z
       .string()
       .optional()
-      .describe("Date for changelog aggregation in YYYY-MM-DD"),
+      .describe(
+        bundle.describeParam(
+          "loom_ingest",
+          "changelogDate",
+          "Date for changelog aggregation in YYYY-MM-DD",
+        ),
+      ),
   },
   async ({
     category,
@@ -629,12 +698,27 @@ server.tool(
 // ─── Tool: loom_doctor ────────────────────────────────────────
 server.tool(
   "loom_doctor",
-  "Run health gate for memory graph quality. Returns structured severity and gate decision.",
+  bundle.describeTool(
+    "loom_doctor",
+    "Run health gate for memory graph quality. Returns structured severity and gate decision.",
+  ),
   {
-    staleDays: z.number().optional(),
-    includeThreads: z.boolean().optional(),
-    maxFindings: z.number().optional(),
-    failOn: z.enum(["none", "error", "warn"]).optional(),
+    staleDays: z
+      .number()
+      .optional()
+      .describe(bundle.describeParam("loom_doctor", "staleDays", "Stale threshold in days")),
+    includeThreads: z
+      .boolean()
+      .optional()
+      .describe(bundle.describeParam("loom_doctor", "includeThreads", "Include threads category")),
+    maxFindings: z
+      .number()
+      .optional()
+      .describe(bundle.describeParam("loom_doctor", "maxFindings", "Max findings to return")),
+    failOn: z
+      .enum(["none", "error", "warn"])
+      .optional()
+      .describe(bundle.describeParam("loom_doctor", "failOn", "Gate level: none | error | warn")),
   },
   async ({ staleDays, includeThreads, maxFindings, failOn }) => {
     const { loomRoot } = await getRuntimeContext();
@@ -667,27 +751,54 @@ server.tool(
 // ─── Tool: loom_trace ─────────────────────────────────────────
 server.tool(
   "loom_trace",
-  "Search the Loom knowledge base by keyword. Use this to recall previously recorded knowledge about the system before making decisions or answering questions.",
+  bundle.describeTool(
+    "loom_trace",
+    "Search the Loom knowledge base by keyword. Use this to recall previously recorded knowledge about the system before making decisions or answering questions.",
+  ),
   {
     query: z
       .string()
-      .describe("Keyword or phrase to search across all knowledge entries"),
+      .describe(
+        bundle.describeParam(
+          "loom_trace",
+          "query",
+          "Keyword or phrase to search across all knowledge entries",
+        ),
+      ),
     category: z
       .enum(["concepts", "decisions", "threads"])
       .optional()
-      .describe("Optional category filter"),
+      .describe(bundle.describeParam("loom_trace", "category", "Optional category filter")),
     tags: z
       .array(z.string())
       .optional()
-      .describe("Optional tag filter; all provided tags must be present"),
+      .describe(
+        bundle.describeParam(
+          "loom_trace",
+          "tags",
+          "Optional tag filter; all provided tags must be present",
+        ),
+      ),
     limit: z
       .number()
       .optional()
-      .describe("Maximum results to return after relevance sorting"),
+      .describe(
+        bundle.describeParam(
+          "loom_trace",
+          "limit",
+          "Maximum results to return after relevance sorting",
+        ),
+      ),
     trace_mode: z
       .enum(["legacy", "layered"])
       .optional()
-      .describe("Trace pipeline mode: layered (default) or legacy full scan"),
+      .describe(
+        bundle.describeParam(
+          "loom_trace",
+          "trace_mode",
+          "Trace pipeline mode: layered (default) or legacy full scan",
+        ),
+      ),
   },
   async ({ query, category, tags, limit, trace_mode }) => {
     const { loomRoot } = await getRuntimeContext();
@@ -741,7 +852,10 @@ server.tool(
 // ─── Tool: loom_index ─────────────────────────────────────────
 server.tool(
   "loom_index",
-  "Read the Loom index and mandatory-read memory set first. Progressive disclosure order: index -> trace -> read.",
+  bundle.describeTool(
+    "loom_index",
+    "Read the Loom index and mandatory-read memory set first. Progressive disclosure order: index -> trace -> read.",
+  ),
   {},
   async () => {
     const { loomRoot } = await getRuntimeContext();
@@ -795,19 +909,40 @@ server.tool(
 // ─── Tool: loom_probe_start ───────────────────────────────────
 server.tool(
   "loom_probe_start",
-  "Start a proactive inquiry session: generate clarification questions and persist a probe session state.",
+  bundle.describeTool(
+    "loom_probe_start",
+    "Start a proactive inquiry session: generate clarification questions and persist a probe session state.",
+  ),
   {
     context: z
       .string()
-      .describe("Current dialog summary or latest user request"),
+      .describe(
+        bundle.describeParam(
+          "loom_probe_start",
+          "context",
+          "Current dialog summary or latest user request",
+        ),
+      ),
     goal: z
       .string()
       .optional()
-      .describe("Optional objective for this dialogue turn"),
+      .describe(
+        bundle.describeParam(
+          "loom_probe_start",
+          "goal",
+          "Optional objective for this dialogue turn",
+        ),
+      ),
     max_questions: z
       .number()
       .optional()
-      .describe("How many questions to generate (default: 3, max: 5)"),
+      .describe(
+        bundle.describeParam(
+          "loom_probe_start",
+          "max_questions",
+          "How many questions to generate (default: 3, max: 5)",
+        ),
+      ),
   },
   async ({ context, goal, max_questions }) => {
     const { loomRoot } = await getRuntimeContext();
@@ -839,9 +974,20 @@ server.tool(
 // ─── Tool: loom_probe_commit ──────────────────────────────────
 server.tool(
   "loom_probe_commit",
-  "Commit answers for an existing probe session and persist Q&A into Loom threads.",
+  bundle.describeTool(
+    "loom_probe_commit",
+    "Commit answers for an existing probe session and persist Q&A into Loom threads.",
+  ),
   {
-    session_id: z.string().describe("Probe session id returned by loom_probe_start"),
+    session_id: z
+      .string()
+      .describe(
+        bundle.describeParam(
+          "loom_probe_commit",
+          "session_id",
+          "Probe session id returned by loom_probe_start",
+        ),
+      ),
     answers: z
       .array(
         z.object({
@@ -850,16 +996,37 @@ server.tool(
           answer: z.string(),
         }),
       )
-      .describe("Answers mapped by question_id (recommended) or exact question text"),
+      .describe(
+        bundle.describeParam(
+          "loom_probe_commit",
+          "answers",
+          "Answers mapped by question_id (recommended) or exact question text",
+        ),
+      ),
     title: z
       .string()
       .optional()
-      .describe("Optional Loom thread title. Default is probe-session-<id>"),
-    tags: z.array(z.string()).optional().describe("Optional extra tags"),
+      .describe(
+        bundle.describeParam(
+          "loom_probe_commit",
+          "title",
+          "Optional Loom thread title. Default is probe-session-<id>",
+        ),
+      ),
+    tags: z
+      .array(z.string())
+      .optional()
+      .describe(bundle.describeParam("loom_probe_commit", "tags", "Optional extra tags")),
     commit: z
       .boolean()
       .optional()
-      .describe("Whether to auto-commit to git (default: true)"),
+      .describe(
+        bundle.describeParam(
+          "loom_probe_commit",
+          "commit",
+          "Whether to auto-commit to git (default: true)",
+        ),
+      ),
   },
   async ({ session_id, answers, title, tags, commit }) => {
     const { config, loomRoot } = await getRuntimeContext();
@@ -900,16 +1067,39 @@ server.tool(
 // ─── Tool: loom_probe (compat) ────────────────────────────────
 server.tool(
   "loom_probe",
-  "Compatibility wrapper for proactive inquiry. Use loom_probe_start + loom_probe_commit for explicit state-machine flow.",
+  bundle.describeTool(
+    "loom_probe",
+    "Compatibility wrapper for proactive inquiry. Use loom_probe_start + loom_probe_commit for explicit state-machine flow.",
+  ),
   {
     context: z
       .string()
       .optional()
-      .describe("Current dialog summary or latest user request"),
-    goal: z.string().optional().describe("Optional objective"),
-    max_questions: z.number().optional().describe("Question count (default: 3, max: 5)"),
-    record: z.boolean().optional().describe("If true, write answers to Loom"),
-    session_id: z.string().optional().describe("Existing probe session id"),
+      .describe(
+        bundle.describeParam(
+          "loom_probe",
+          "context",
+          "Current dialog summary or latest user request",
+        ),
+      ),
+    goal: z
+      .string()
+      .optional()
+      .describe(bundle.describeParam("loom_probe", "goal", "Optional objective")),
+    max_questions: z
+      .number()
+      .optional()
+      .describe(
+        bundle.describeParam("loom_probe", "max_questions", "Question count (default: 3, max: 5)"),
+      ),
+    record: z
+      .boolean()
+      .optional()
+      .describe(bundle.describeParam("loom_probe", "record", "If true, write answers to Loom")),
+    session_id: z
+      .string()
+      .optional()
+      .describe(bundle.describeParam("loom_probe", "session_id", "Existing probe session id")),
     answers: z
       .array(
         z.object({
@@ -919,10 +1109,21 @@ server.tool(
         }),
       )
       .optional()
-      .describe("Answer list for commit"),
-    title: z.string().optional().describe("Optional thread title for memory write"),
-    tags: z.array(z.string()).optional().describe("Optional tags"),
-    commit: z.boolean().optional().describe("Whether to auto-commit (default: true)"),
+      .describe(bundle.describeParam("loom_probe", "answers", "Answer list for commit")),
+    title: z
+      .string()
+      .optional()
+      .describe(bundle.describeParam("loom_probe", "title", "Optional thread title for memory write")),
+    tags: z
+      .array(z.string())
+      .optional()
+      .describe(bundle.describeParam("loom_probe", "tags", "Optional tags")),
+    commit: z
+      .boolean()
+      .optional()
+      .describe(
+        bundle.describeParam("loom_probe", "commit", "Whether to auto-commit (default: true)"),
+      ),
   },
   async ({ context, goal, max_questions, record, session_id, answers, title, tags, commit }) => {
     const { config, loomRoot } = await getRuntimeContext();
@@ -1016,13 +1217,22 @@ server.tool(
 // ─── Tool: loom_read ──────────────────────────────────────────
 server.tool(
   "loom_read",
-  "Read the full content of a specific knowledge entry from the Loom knowledge base.",
+  bundle.describeTool(
+    "loom_read",
+    "Read the full content of a specific knowledge entry from the Loom knowledge base.",
+  ),
   {
-    category: z.enum(["concepts", "decisions", "threads"]),
+    category: z
+      .enum(["concepts", "decisions", "threads"])
+      .describe(bundle.describeParam("loom_read", "category", "concepts | decisions | threads")),
     slug: z
       .string()
       .describe(
-        "The slug (filename without .md extension) of the knowledge entry to read",
+        bundle.describeParam(
+          "loom_read",
+          "slug",
+          "The slug (filename without .md extension) of the knowledge entry to read",
+        ),
       ),
   },
   async ({ category, slug }) => {
@@ -1047,7 +1257,10 @@ server.tool(
 // ─── Tool: loom_list ──────────────────────────────────────────
 server.tool(
   "loom_list",
-  "List all knowledge entries in the Loom knowledge base. Use this to get an overview of what the system knows.",
+  bundle.describeTool(
+    "loom_list",
+    "List all knowledge entries in the Loom knowledge base. Use this to get an overview of what the system knows.",
+  ),
   {},
   async () => {
     const { config, loomRoot } = await getRuntimeContext();
@@ -1093,7 +1306,10 @@ server.tool(
 // ─── Tool: loom_sync ──────────────────────────────────────────
 server.tool(
   "loom_sync",
-  "Synchronize the Loom knowledge base with the remote Git repository. Pulls latest changes from teammates and pushes local changes.",
+  bundle.describeTool(
+    "loom_sync",
+    "Synchronize the Loom knowledge base with the remote Git repository. Pulls latest changes from teammates and pushes local changes.",
+  ),
   {},
   async () => {
     const { config } = await getRuntimeContext();
@@ -1118,12 +1334,21 @@ server.tool(
 // ─── Tool: loom_log ───────────────────────────────────────────
 server.tool(
   "loom_log",
-  "Show the Git history of Loom knowledge changes. Useful for understanding how the system's understanding has evolved over time.",
+  bundle.describeTool(
+    "loom_log",
+    "Show the Git history of Loom knowledge changes. Useful for understanding how the system's understanding has evolved over time.",
+  ),
   {
     limit: z
       .number()
       .optional()
-      .describe("Maximum number of log entries to show (default: 10)"),
+      .describe(
+        bundle.describeParam(
+          "loom_log",
+          "limit",
+          "Maximum number of log entries to show (default: 10)",
+        ),
+      ),
   },
   async ({ limit }) => {
     const { config } = await getRuntimeContext();
@@ -1137,24 +1362,51 @@ server.tool(
 // ─── Tool: loom_changelog ──────────────────────────────────────
 server.tool(
   "loom_changelog",
-  "Update public CHANGELOG.md grouped by date. Supports auto mode (derive daily highlights from git commits) and manual mode (provide highlights explicitly).",
+  bundle.describeTool(
+    "loom_changelog",
+    "Update public CHANGELOG.md grouped by date. Supports auto mode (derive daily highlights from git commits) and manual mode (provide highlights explicitly).",
+  ),
   {
     mode: z
       .enum(["auto", "manual"])
       .optional()
-      .describe("auto: infer highlights from daily git commits; manual: use provided highlights"),
+      .describe(
+        bundle.describeParam(
+          "loom_changelog",
+          "mode",
+          "auto: infer highlights from daily git commits; manual: use provided highlights",
+        ),
+      ),
     date: z
       .string()
       .optional()
-      .describe("Date in YYYY-MM-DD format. Defaults to today."),
+      .describe(
+        bundle.describeParam(
+          "loom_changelog",
+          "date",
+          "Date in YYYY-MM-DD format. Defaults to today.",
+        ),
+      ),
     highlights: z
       .array(z.string())
       .optional()
-      .describe("Manual highlights used when mode=manual"),
+      .describe(
+        bundle.describeParam(
+          "loom_changelog",
+          "highlights",
+          "Manual highlights used when mode=manual",
+        ),
+      ),
     commit: z
       .boolean()
       .optional()
-      .describe("Whether to auto-commit changelog update (default: true)"),
+      .describe(
+        bundle.describeParam(
+          "loom_changelog",
+          "commit",
+          "Whether to auto-commit changelog update (default: true)",
+        ),
+      ),
   },
   async ({ mode, date, highlights, commit }) => {
     const { config } = await getRuntimeContext();
@@ -1203,16 +1455,61 @@ server.tool(
 // ─── Tool: loom_metrics_snapshot ───────────────────────────────
 server.tool(
   "loom_metrics_snapshot",
-  "Generate metrics snapshot JSON for governance and auxiliary indicators.",
+  bundle.describeTool(
+    "loom_metrics_snapshot",
+    "Generate metrics snapshot JSON for governance and auxiliary indicators.",
+  ),
   {
     snapshot_date: z
       .string()
       .optional()
-      .describe("Date in YYYY-MM-DD. Defaults to today."),
-    stale_days: z.number().optional(),
-    include_threads: z.boolean().optional(),
-    max_findings: z.number().optional(),
-    fail_on: z.enum(["none", "error", "warn"]).optional(),
+      .describe(
+        bundle.describeParam(
+          "loom_metrics_snapshot",
+          "snapshot_date",
+          "Date in YYYY-MM-DD. Defaults to today.",
+        ),
+      ),
+    stale_days: z
+      .number()
+      .optional()
+      .describe(
+        bundle.describeParam(
+          "loom_metrics_snapshot",
+          "stale_days",
+          "Stale-age threshold in days for doctor (optional).",
+        ),
+      ),
+    include_threads: z
+      .boolean()
+      .optional()
+      .describe(
+        bundle.describeParam(
+          "loom_metrics_snapshot",
+          "include_threads",
+          "Whether doctor includes threads category (optional).",
+        ),
+      ),
+    max_findings: z
+      .number()
+      .optional()
+      .describe(
+        bundle.describeParam(
+          "loom_metrics_snapshot",
+          "max_findings",
+          "Maximum doctor findings to return (optional).",
+        ),
+      ),
+    fail_on: z
+      .enum(["none", "error", "warn"])
+      .optional()
+      .describe(
+        bundle.describeParam(
+          "loom_metrics_snapshot",
+          "fail_on",
+          "Doctor gate: none | error | warn (optional).",
+        ),
+      ),
   },
   async ({
     snapshot_date,
@@ -1261,11 +1558,41 @@ server.tool(
 // ─── Tool: loom_metrics_report ─────────────────────────────────
 server.tool(
   "loom_metrics_report",
-  "Generate a weekly-style metrics report draft from events and latest snapshots.",
+  bundle.describeTool(
+    "loom_metrics_report",
+    "Generate a weekly-style metrics report draft from events and latest snapshots.",
+  ),
   {
-    since: z.string().optional().describe("Only include events since YYYY-MM-DD"),
-    limit: z.number().optional().describe("Max number of events to analyze"),
-    report_date: z.string().optional().describe("Report date label YYYY-MM-DD"),
+    since: z
+      .string()
+      .optional()
+      .describe(
+        bundle.describeParam(
+          "loom_metrics_report",
+          "since",
+          "Only include events since YYYY-MM-DD",
+        ),
+      ),
+    limit: z
+      .number()
+      .optional()
+      .describe(
+        bundle.describeParam(
+          "loom_metrics_report",
+          "limit",
+          "Max number of events to analyze",
+        ),
+      ),
+    report_date: z
+      .string()
+      .optional()
+      .describe(
+        bundle.describeParam(
+          "loom_metrics_report",
+          "report_date",
+          "Report date label YYYY-MM-DD",
+        ),
+      ),
   },
   async ({ since, limit, report_date }) => {
     const { loomRoot } = await getRuntimeContext();
@@ -1292,7 +1619,10 @@ server.tool(
 // ─── Tool: loom_events ─────────────────────────────────────────
 server.tool(
   "loom_events",
-  "Query Loom append-only event stream with type/since/limit filters.",
+  bundle.describeTool(
+    "loom_events",
+    "Query Loom append-only event stream with type/since/limit filters.",
+  ),
   {
     type: z
       .enum([
@@ -1306,10 +1636,24 @@ server.tool(
         "changelog.updated",
         "metrics.snapshot.generated",
       ])
-      .optional(),
-    since: z.string().optional().describe("Only include events since YYYY-MM-DD"),
-    limit: z.number().optional().describe("Maximum events to return"),
-    order: z.enum(["asc", "desc"]).optional(),
+      .optional()
+      .describe(bundle.describeParam("loom_events", "type", "Event type filter (optional)")),
+    since: z
+      .string()
+      .optional()
+      .describe(
+        bundle.describeParam("loom_events", "since", "Only include events since YYYY-MM-DD"),
+      ),
+    limit: z
+      .number()
+      .optional()
+      .describe(
+        bundle.describeParam("loom_events", "limit", "Maximum events to return"),
+      ),
+    order: z
+      .enum(["asc", "desc"])
+      .optional()
+      .describe(bundle.describeParam("loom_events", "order", "asc | desc")),
   },
   async ({ type, since, limit, order }) => {
     const { loomRoot } = await getRuntimeContext();
@@ -1349,12 +1693,21 @@ server.tool(
 // ─── Tool: loom_upgrade ────────────────────────────────────────
 server.tool(
   "loom_upgrade",
-  "Upgrade Loom MCP server to the latest version from its GitHub repository. This updates the Loom install itself, not the current project's .loom knowledge files.",
+  bundle.describeTool(
+    "loom_upgrade",
+    "Upgrade Loom MCP server to the latest version from its GitHub repository. This updates the Loom install itself, not the current project's .loom knowledge files.",
+  ),
   {
     dryRun: z
       .boolean()
       .optional()
-      .describe("If true, only check upgrade readiness without pulling changes"),
+      .describe(
+        bundle.describeParam(
+          "loom_upgrade",
+          "dryRun",
+          "If true, only check upgrade readiness without pulling changes",
+        ),
+      ),
   },
   async ({ dryRun }) => {
     const result = await upgradeFromGit(SERVER_ROOT, dryRun ?? false);
@@ -1372,24 +1725,43 @@ server.tool(
 // ─── Tool: loom_deprecate ─────────────────────────────────────
 server.tool(
   "loom_deprecate",
-  "Mark a knowledge entry as deprecated. Use this when information is outdated, superseded by a newer entry, or no longer accurate. The entry is preserved but clearly marked.",
+  bundle.describeTool(
+    "loom_deprecate",
+    "Mark a knowledge entry as deprecated. Use this when information is outdated, superseded by a newer entry, or no longer accurate. The entry is preserved but clearly marked.",
+  ),
   {
-    category: z.enum(["concepts", "decisions", "threads"]),
+    category: z
+      .enum(["concepts", "decisions", "threads"])
+      .describe(
+        bundle.describeParam("loom_deprecate", "category", "concepts | decisions | threads"),
+      ),
     slug: z
       .string()
       .describe(
-        "The slug (filename without .md) of the entry to deprecate",
+        bundle.describeParam(
+          "loom_deprecate",
+          "slug",
+          "The slug (filename without .md) of the entry to deprecate",
+        ),
       ),
     reason: z
       .string()
       .describe(
-        "Why this entry is being deprecated (e.g. 'Replaced by new auth flow', 'No longer relevant after migration')",
+        bundle.describeParam(
+          "loom_deprecate",
+          "reason",
+          "Why this entry is being deprecated (e.g. 'Replaced by new auth flow', 'No longer relevant after migration')",
+        ),
       ),
     superseded_by: z
       .string()
       .optional()
       .describe(
-        "Optional path to the replacement entry (e.g. 'concepts/new-auth-flow')",
+        bundle.describeParam(
+          "loom_deprecate",
+          "superseded_by",
+          "Optional path to the replacement entry (e.g. 'concepts/new-auth-flow')",
+        ),
       ),
   },
   async ({ category, slug, reason, superseded_by }) => {
@@ -1438,20 +1810,41 @@ server.tool(
 // ─── Tool: loom_reflect ───────────────────────────────────────
 server.tool(
   "loom_reflect",
-  "Run a self-reflection audit on Loom knowledge base to detect potential conflicts, stale entries, missing tags, and merge opportunities.",
+  bundle.describeTool(
+    "loom_reflect",
+    "Run a self-reflection audit on Loom knowledge base to detect potential conflicts, stale entries, missing tags, and merge opportunities.",
+  ),
   {
     staleDays: z
       .number()
       .optional()
-      .describe("Entries not updated for this many days are considered stale (default: 30)"),
+      .describe(
+        bundle.describeParam(
+          "loom_reflect",
+          "staleDays",
+          "Entries not updated for this many days are considered stale (default: 30)",
+        ),
+      ),
     includeThreads: z
       .boolean()
       .optional()
-      .describe("Whether to include threads category in reflection scan (default: true)"),
+      .describe(
+        bundle.describeParam(
+          "loom_reflect",
+          "includeThreads",
+          "Whether to include threads category in reflection scan (default: true)",
+        ),
+      ),
     maxFindings: z
       .number()
       .optional()
-      .describe("Maximum number of findings to return (default: 20)"),
+      .describe(
+        bundle.describeParam(
+          "loom_reflect",
+          "maxFindings",
+          "Maximum number of findings to return (default: 20)",
+        ),
+      ),
   },
   async ({ staleDays, includeThreads, maxFindings }) => {
     const { config, loomRoot } = await getRuntimeContext();
@@ -1512,45 +1905,10 @@ server.tool(
   },
 );
 
-// ─── Resource: loom://index ───────────────────────────────────
-server.resource("loom-index", "loom://index", async (uri) => {
-  const { loomRoot } = await getRuntimeContext();
+} // end registerLoomToolDefinitions
 
-  try {
-    const indexContent = await rebuildIndex(loomRoot);
-    return {
-      contents: [
-        {
-          uri: uri.href,
-          mimeType: "text/markdown",
-          text: indexContent,
-        },
-      ],
-    };
-  } catch {
-    return {
-      contents: [
-        {
-          uri: uri.href,
-          mimeType: "text/plain",
-          text: "Loom not initialized. Use loom_init to get started.",
-        },
-      ],
-    };
-  }
-});
-
-// ─── Prompt: loom-instructions ─────────────────────────────────
-server.prompt(
-  "loom-instructions",
-  "System instructions that teach the AI how and when to use Loom tools proactively during conversations.",
-  async () => ({
-    messages: [
-      {
-        role: "user",
-        content: {
-          type: "text",
-          text: `You have access to a knowledge management system called Loom. Follow these guidelines:
+/** Used when `loom-instructions.md` is missing for the active locale/version. */
+const FALLBACK_LOOM_INSTRUCTIONS = `You have access to a knowledge management system called Loom. Follow these guidelines:
 
 ## When to WRITE (loom_weave)
 
@@ -1571,6 +1929,8 @@ Use mode:
 - "replace" for new entries or full rewrites
 - "append" to add new findings to an existing topic without losing previous content
 - "section" to update a specific ## heading within an existing entry
+
+When Loom MCP is connected, write knowledge under .loom/ via loom_weave (not host file-edit tools), so lint, index rebuild, git commit, and events run. Put structured body in "content" starting with ## headings; do not duplicate the top-level # title (title field supplies it).
 
 ## When to READ (loom_trace / loom_read)
 
@@ -1616,12 +1976,54 @@ Use mode:
 - For concepts/decisions, include domain + links whenever possible for graph continuity
 - Keep entries focused: one topic per entry
 - Prefer structured Markdown with ## headings
-- For threads: summarize key points, don't dump raw conversation`,
+- For threads: summarize key points, don't dump raw conversation`;
+
+function registerLoomPrompt(bundle: LoadedPrompts): void {
+  const text = bundle.loomInstructions.trim() || FALLBACK_LOOM_INSTRUCTIONS;
+  server.prompt(
+    "loom-instructions",
+    "系统说明：在对话中如何、何时主动使用 Loom 工具。",
+    async () => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text,
+          },
         },
-      },
-    ],
-  }),
-);
+      ],
+    }),
+  );
+}
+
+// ─── Resource: loom://index ───────────────────────────────────
+server.resource("loom-index", "loom://index", async (uri) => {
+  const { loomRoot } = await getRuntimeContext();
+
+  try {
+    const indexContent = await rebuildIndex(loomRoot);
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/markdown",
+          text: indexContent,
+        },
+      ],
+    };
+  } catch {
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/plain",
+          text: "Loom not initialized. Use loom_init to get started.",
+        },
+      ],
+    };
+  }
+});
 
 // ─── Boot ─────────────────────────────────────────────────────
 function maybeHandleMetaArgs(): boolean {
@@ -1648,6 +2050,10 @@ Notes:
 
 async function main() {
   if (maybeHandleMetaArgs()) return;
+  const config = await loadConfig(WORK_DIR);
+  const bundle = await loadPromptBundle(SERVER_ROOT, WORK_DIR, config);
+  registerLoomToolDefinitions(bundle);
+  registerLoomPrompt(bundle);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

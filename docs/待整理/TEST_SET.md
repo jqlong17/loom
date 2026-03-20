@@ -73,13 +73,13 @@
 # 项目根目录执行
 
 # 使用当前 .loom 的已有数据跑测试集（不写种子）
-npx tsx scripts/run-eval.ts --set .loom/eval/test-set.json
+npx tsx scripts/run-eval.ts --set docs/eval/test-set.json
 
 # 在临时目录播种并跑（不污染现有 .loom）
-npx tsx scripts/run-eval.ts --seed --loom /tmp/loom-eval --set .loom/eval/test-set.json
+npx tsx scripts/run-eval.ts --seed --loom /tmp/loom-eval --set docs/eval/test-set.json
 ```
 
-默认测试集：`.loom/eval/test-set.json`（见仓库内该文件及 `docs/TEST_SET.md`）。
+默认测试集：`docs/eval/test-set.json`（见仓库内该文件及 `docs/TEST_SET.md`）。
 
 脚本会：
 
@@ -107,5 +107,5 @@ npx tsx scripts/run-eval.ts --seed --loom /tmp/loom-eval --set .loom/eval/test-s
 
 ## 6. 测试集存放建议
 
-- 仓库内：`.loom/eval/test-set.json` 或 `docs/eval/test-set.json`（只放用例与 seed 描述，不放大体量正文）。
+- 仓库内：`docs/eval/test-set.json`（只放用例与 seed 描述，不放大体量正文）。
 - 种子数据若与现有 `.loom` 一致，可只维护 test-set.json；若需隔离，用脚本在临时目录 weave 固定种子再跑 eval。

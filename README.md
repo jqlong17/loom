@@ -92,6 +92,8 @@ npm run build
 }
 ```
 
+可选：若希望 Cursor 内 AI 更主动调用 Loom，可自行将 `docs/CURSOR_HINTS.md` 粘贴到编辑器规则（仓库不再内置 `.cursorrules`）。
+
 </details>
 
 <details>
@@ -450,6 +452,8 @@ node dist/cli.js doctor --failOn error --json
 ```json
 {
   "loomDir": ".loom",
+  "promptVersion": "v1",
+  "promptLocale": "zh",
   "autoCommit": true,
   "autoPush": false,
   "branch": "main",
@@ -465,6 +469,8 @@ node dist/cli.js doctor --failOn error --json
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
+| `promptVersion` | `v1` | MCP 工具说明与 `loom-instructions` 使用的提示词版本目录（`prompts/<locale>/<version>/`）；可被环境变量 `LOOM_PROMPT_VERSION` 覆盖 |
+| `promptLocale` | `zh` | 提示词语言目录；可被 `LOOM_PROMPT_LOCALE` 覆盖（当前以 `zh` 为主，预留 `en`） |
 | `loomDir` | `.loom` | 知识库目录 |
 | `autoCommit` | `true` | 每次 weave 后自动提交 |
 | `autoPush` | `false` | 每次提交后自动推送远程 |

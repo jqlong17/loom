@@ -11,7 +11,7 @@ import { ensureLoomStructure } from "../src/config.js";
 import { readEvents } from "../src/events.js";
 import { rebuildIndex, trace, weave } from "../src/weaver.js";
 
-const DEFAULT_SET = ".loom/eval/test-set.json";
+const DEFAULT_SET = "docs/eval/test-set.json";
 
 interface EvalCase {
   id: string;
