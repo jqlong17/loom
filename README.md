@@ -170,6 +170,12 @@ scope 说明：`--scope local`（当前项目）、`--scope project`（团队共
 
 也可以放到全局配置 `~/.config/opencode/opencode.json` 中，对所有项目生效。
 
+**演练与自动化（开发者 / 进阶）**
+
+- 隔离沙箱 + 文档：`docs/技术文档/OpenCode-Loom-MCP-演练沙箱.md`；一键生成目录：`npm run sandbox:opencode`。
+- **源码版 OpenCode** 下 MCP 链路 E2E（需本机 Bun、模型配置与 `OPENCODE_PACKAGE_DIR`）：`npm run test:e2e-opencode`，说明见 `tests/e2e-opencode-sandbox/README.md`；每次运行结果归档在 `tests/e2e-opencode-sandbox/results/run-*`。
+- 将同类能力迁移到其他宿主时的**模式说明**（清单、坑位、本仓库对照路径）：`docs/跨项目可复用经验/`。
+
 </details>
 
 <details>
@@ -561,6 +567,9 @@ npm run lint     # 类型检查
 npm test         # 运行单元/集成测试
 npm run test:coverage   # 运行覆盖率测试（含阈值）
 npm run test:regression # 生成可复现测试日志：.test-logs/latest.log
+npm run sandbox:opencode   # 生成 OpenCode + Loom MCP 隔离演练沙箱目录
+npm run test:e2e-opencode  # 源码 OpenCode + Loom MCP E2E（需 OPENCODE_PACKAGE_DIR，见 tests/e2e-opencode-sandbox/README.md）
+npm run demo:opencode-context-log  # 离线生成与 OpenCode 同形的上下文请求日志 JSONL 样例
 npm run changelog:auto  # 自动更新当天 CHANGELOG 核心变更
 npm run cli -- help  # 查看 CLI Wrapper 命令
 npm run hooks:install  # 安装 post-commit 自动更新 hook

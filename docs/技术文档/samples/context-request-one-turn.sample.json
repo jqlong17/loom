@@ -1,0 +1,38 @@
+{
+  "v": 1,
+  "ts": "2026-03-20T21:01:15.010Z",
+  "sessionID": "demo-session-one-turn",
+  "requestMessageId": "msg-after-user-prompt",
+  "providerID": "openai",
+  "modelId": "gpt-4o",
+  "agent": {
+    "name": "build",
+    "mode": "build"
+  },
+  "small": false,
+  "sampling": {
+    "temperature": 0.2,
+    "maxOutputTokens": 8192,
+    "toolChoice": "auto"
+  },
+  "headers": {
+    "Authorization": "[REDACTED]",
+    "User-Agent": "opencode/1.2.x"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "[agent: build] You are OpenCode. Prefer MCP tools when available.\n\n---\n(此处为示意：真实环境会更长)"
+    },
+    {
+      "role": "user",
+      "content": "请调用 loom_index，把返回里「必读集合」用三句话中文概括。"
+    }
+  ],
+  "tools": [
+    {
+      "name": "loom_index",
+      "description": "Read the Loom index and mandatory-read set. Progressive disclosure: index → trace → read."
+    }
+  ]
+}

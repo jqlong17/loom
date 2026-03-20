@@ -320,3 +320,20 @@ flowchart LR
 - **从模型视角理解「每轮上下文」与如何模拟 / 记录**：[大模型视角-上下文与可观测性.md](./大模型视角-上下文与可观测性.md)
 - **OpenCode + Loom MCP 单轮对话演练沙箱**：[OpenCode-Loom-MCP-演练沙箱.md](./OpenCode-Loom-MCP-演练沙箱.md)（`npm run sandbox:opencode`）
 - **OpenCode 侧请求上下文落盘（执行计划）**：[执行计划/03-opencode-context-request-logging.md](../执行计划/03-opencode-context-request-logging.md)
+- **跨项目可复用：宿主 CLI + MCP 隔离沙箱 E2E 模式**：[跨项目可复用经验/README.md](../跨项目可复用经验/README.md)
+
+---
+
+## 07. 宿主集成 E2E 与可观测性（补充）
+
+本仓库在 **单元测试（Vitest）** 之外，增加一层 **「真实宿主进程 + 真实 stdio MCP + 隔离工作目录」** 的脚本化 E2E，用于验证「模型是否实际调度 `loom_*`」与（可选）宿主侧 **上下文请求 JSONL** 是否落盘。该层 **不替代** `tests/*.test.ts`，而是覆盖集成与可观测性缺口。
+
+| 能力 | 路径 / 命令 | 说明 |
+| --- | --- | --- |
+| 沙箱脚手架 | `scripts/opencode-loom-sandbox/setup.sh`、`npm run sandbox:opencode` | 生成独立目录、`opencode.json` 中声明 Loom MCP、`LOOM_WORK_DIR` 指向沙箱 |
+| E2E Runner | `tests/e2e-opencode-sandbox/runner.mjs`、`npm run test:e2e-opencode` | 需环境变量 `OPENCODE_PACKAGE_DIR`（OpenCode `packages/opencode`）；子进程 **stdin ignore** 避免非交互阻塞 |
+| 用例清单 | `tests/e2e-opencode-sandbox/cases.json` | 自然语言 prompt + stdout 子串断言（工具行前缀如 `loom_loom_index`） |
+| 运行归档 | `tests/e2e-opencode-sandbox/results/run-*` | `manifest.json`、`SUMMARY.md`、逐用例输出副本、可选 `context-request-log/**/requests.jsonl` |
+| 离线日志样例 | `scripts/reproduce-opencode-context-log-sample.sh`、`npm run demo:opencode-context-log` | 不调模型，验证与 OpenCode `fireContextRequestLog` 同形 JSONL |
+
+**数据流（概念）**：临时沙箱目录 → 宿主读取项目级 `opencode.json` → 启动 Loom MCP（`node dist/index.js`）→ 宿主 `run` 一轮用户话 → Loom 读写沙箱内 `.loom`；断言依赖宿主合并输出与归档文件，而非伪造 MCP 响应。

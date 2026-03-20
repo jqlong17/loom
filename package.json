@@ -15,6 +15,7 @@
     "start": "node dist/index.js",
     "lint": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e-opencode": "node tests/e2e-opencode-sandbox/runner.mjs",
     "test:coverage": "vitest run --coverage",
     "test:regression": "bash -lc 'set -o pipefail; mkdir -p .test-logs; vitest run --coverage --reporter=verbose 2>&1 | tee .test-logs/latest.log'",
     "prepublishOnly": "npm run build && npm run test",
@@ -24,6 +25,7 @@
     "changelog:auto": "tsx scripts/changelog-auto.ts",
     "cli": "node dist/cli.js",
     "sandbox:opencode": "bash scripts/opencode-loom-sandbox/setup.sh",
+    "demo:opencode-context-log": "bash scripts/reproduce-opencode-context-log-sample.sh",
     "hooks:install": "bash scripts/hooks-install.sh"
   },
   "keywords": [

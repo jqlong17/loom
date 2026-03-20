@@ -137,6 +137,12 @@ Add to the `mcp` field in `opencode.json` at your project root:
 
 Or add to global config at `~/.config/opencode/opencode.json` to enable for all projects.
 
+**Sandbox & E2E (advanced)**
+
+- Isolated sandbox + guide: `docs/技术文档/OpenCode-Loom-MCP-演练沙箱.md`; scaffold: `npm run sandbox:opencode`.
+- **Source OpenCode** + Loom MCP E2E (requires local Bun, model auth, `OPENCODE_PACKAGE_DIR`): `npm run test:e2e-opencode` — see `tests/e2e-opencode-sandbox/README.md`; artifacts under `tests/e2e-opencode-sandbox/results/run-*`.
+- Cross-project pattern write-up: `docs/跨项目可复用经验/`.
+
 </details>
 
 <details>
@@ -470,6 +476,9 @@ npm run lint     # Type check
 npm test         # Run tests
 npm run test:coverage   # Run coverage checks with thresholds
 npm run test:regression # Produce reproducible logs at .test-logs/latest.log
+npm run sandbox:opencode   # Scaffold isolated OpenCode + Loom MCP lab directory
+npm run test:e2e-opencode  # E2E: source OpenCode + Loom MCP (needs OPENCODE_PACKAGE_DIR; see tests/e2e-opencode-sandbox/README.md)
+npm run demo:opencode-context-log  # Offline sample JSONL matching OpenCode context-request log shape
 npm run changelog:auto  # Auto-update today's core changelog section
 npm run cli -- help  # Show CLI Wrapper commands
 npm run release:patch # Patch release (create tag + push; triggers auto publish)

@@ -4,3 +4,4 @@ dist/
 coverage/
 .test-logs/
 .loom/
+.sandbox-output/

@@ -1,0 +1,34 @@
+{
+  "cases": [
+    {
+      "id": "index-mandatory-read",
+      "prompt": "请调用 loom_index 工具，把返回里「必读集合」用三句话中文概括。",
+      "expectStdoutContains": ["loom_loom_index"]
+    },
+    {
+      "id": "loom-init",
+      "prompt": "请调用 loom_init 工具（不要编造参数），根据返回用一两句话中文说明当前沙箱知识库是否已初始化、路径与 Git 状态要点。",
+      "expectStdoutContains": ["loom_loom_init"]
+    },
+    {
+      "id": "loom-doctor",
+      "prompt": "请调用 loom_doctor（使用默认参数即可），用一句话中文概括健康检查结果里最关键的结论。",
+      "expectStdoutContains": ["loom_loom_doctor"]
+    },
+    {
+      "id": "weave-concept",
+      "prompt": "请调用 loom_weave：category 为 concepts，标题「E2E 沙箱用例」，正文用 Markdown 写两行（含一个 ## 小节），tags 含 e2e。完成后用一句话确认已写入。",
+      "expectStdoutContains": ["loom_loom_weave"]
+    },
+    {
+      "id": "trace-keyword",
+      "prompt": "请调用 loom_trace：query 使用关键词「E2E」，limit 取 5，category 可不传；用一句话说明命中条数或主要结果。",
+      "expectStdoutContains": ["loom_loom_trace"]
+    },
+    {
+      "id": "index-after-write",
+      "prompt": "再次调用 loom_index，用两句话中文说明「必读集合」里是否还能看到你刚写入的 E2E 相关内容（不要说「未调用工具」）。",
+      "expectStdoutContains": ["loom_loom_index"]
+    }
+  ]
+}

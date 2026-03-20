@@ -1,0 +1,4 @@
+# 每次 E2E 生成的 run-* 目录体积可能较大，不提交；保留说明文件。
+*
+!.gitignore
+!README.md

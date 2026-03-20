@@ -47,3 +47,11 @@
 - **`loom_index`**：对「### Full Index」正文按字符上限截断并附下一步指引（`loom_read` / `loom_trace`），目的是在渐进披露策略下压缩索引大块返回。
 - 补充执行计划与提示词文档（`docs/执行计划/02-mcp-context-footprint-and-bounded-reads.md`、`PROMPTS.md` 中宿主 vs Loom 责任划界）及 `prompts/zh/v1/tools` 说明，目的是让默认上界可被查阅、可被运营侧理解。
 - 新增 `tests/mcp-bounded-reads.test.ts` 覆盖列表截断、legacy 默认 cap、配置 env 等，目的是让有界策略具备可回归基线。
+
+## 2026-03-21
+
+- 新增 **OpenCode 上下文请求日志**相关执行计划与样例（`docs/执行计划/03-opencode-context-request-logging.md`、`docs/技术文档/samples/`、`scripts/reproduce-opencode-context-log-sample.sh`、`npm run demo:opencode-context-log`），目的是在宿主侧可观测「每轮请求 messages/headers」并与 Loom 渐进披露策略对齐讨论。
+- 扩充 **OpenCode + Loom MCP 演练沙箱**文档（`docs/技术文档/OpenCode-Loom-MCP-演练沙箱.md`）：全局配置与源码版共用路径、非交互 `opencode run` 的 stdin/`--model` 坑位、`OPENCODE_CONTEXT_LOG_DIR` 与结果路径说明。
+- 新增 **`tests/e2e-opencode-sandbox/`**：`cases.json` 多用例、`runner.mjs` 驱动源码 OpenCode `run`、每轮结果归档至 `results/run-YYYYMMDD-HHmmss-<hex>/`（含 `manifest.json`、`SUMMARY.md`、各用例 stdout/stderr、可选 `requests.jsonl` 副本），入口 `npm run test:e2e-opencode`，目的是对真实 MCP 工具链做可重复、可审计的 E2E。
+- 新增 **`docs/跨项目可复用经验/`**（`模式-宿主CLI与MCP隔离沙箱-E2E.md`）：将「隔离沙箱 + 宿主 CLI + stdio MCP + 非交互一轮 + 产物归档」抽象为可迁移模式并指向本仓库具体路径，目的是其他项目可低成本复刻同类测试。
+- `package.json` 增加 `test:e2e-opencode` / `demo:opencode-context-log`；`.gitignore` 继续忽略 `.sandbox-output/` 与 E2E 结果产物默认规则（`results/.gitignore`）。
