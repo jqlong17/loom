@@ -2,14 +2,15 @@
 
 | 字段 | 值 |
 |------|-----|
-| 状态 | **草案（待实施）** |
-| 创建 | 2026-03-22 |
+| 状态 | **已完成（OpenCode 本机 fork + Loom 文档/E2E）** |
+| 创建 / 最近更新 | 2026-03-21 |
+| 本机验收通过 | 2026-03-21 |
 | 负责人 / 协作方 | （可选）Loom 产品与 OpenCode 本机 fork 维护者 |
-| 关联文档 | [`执行计划/00-meta-plan-writing-convention.md`](./00-meta-plan-writing-convention.md)（**本文遵循之**）、[`技术文档/大模型视角-上下文与可观测性.md`](../技术文档/大模型视角-上下文与可观测性.md) §7.5、[`技术文档/OpenCode-Loom-MCP-演练沙箱.md`](../技术文档/OpenCode-Loom-MCP-演练沙箱.md)、[`执行计划/01-prompt-sandbox-llm-eval-harness.md`](./01-prompt-sandbox-llm-eval-harness.md) |
+| 关联文档 | [`执行计划/00-meta-plan-writing-convention.md`](./00-meta-plan-writing-convention.md)（**本文遵循之**）、[`技术文档/大模型视角-上下文与可观测性.md`](../技术文档/大模型视角-上下文与可观测性.md) §7.5、[`技术文档/OpenCode-Loom-MCP-演练沙箱.md`](../技术文档/OpenCode-Loom-MCP-演练沙箱.md)、[`tests/e2e-opencode-sandbox/README.md`](../../tests/e2e-opencode-sandbox/README.md)、[`执行计划/01-prompt-sandbox-llm-eval-harness.md`](./01-prompt-sandbox-llm-eval-harness.md) |
 
 **约定**：章节划分对齐 `00` 的 §4.1–§4.10；文件名为 **`03-…`**，与 `01` / `02` 递增一致。
 
-**仓库边界**：本计划的主体实现在 **OpenCode 开源仓库**（实施时在独立 **git 分支** 开发）；**Loom 仓库**仅维护本执行计划与交叉文档。验收时 **OpenCode 子包** 运行 `bun test`（`packages/opencode`），Loom 侧 `npm test` 无直接覆盖属预期。
+**仓库边界**：本计划的主体实现在 **OpenCode 开源仓库**（本机 **fork** 已落地：`context-request-log.ts`、`llm.ts` 挂载、`bun test` 单测）；**Loom 仓库**维护本执行计划、演练文档、样例脚本与 **E2E 联调**（`npm run test:e2e-opencode`）。OpenCode 子包 `bun test` 在 fork 内执行；Loom 侧 `npm test` 无该逻辑的直接单测属预期。
 
 ---
 
@@ -110,7 +111,7 @@ sequenceDiagram
 |---------|------|----------|------|------------|-----|
 | **T0.1** | 从 OpenCode 上游同步并创建功能分支 | OpenCode 仓库根 | 无 | 无 | 分支可推送、本地 `bun install` / `typecheck` 与当前惯例一致 |
 
-- [ ] T0.1
+- [x] T0.1
 
 ### 阶段 1：核心实现（约 1～2 天）
 
@@ -119,8 +120,8 @@ sequenceDiagram
 | **T1.1** | 实现 `buildSnapshot` + `appendContextRequestLog`（脱敏、截断、目录创建） | `packages/opencode/src/session/context-request-log.ts`（建议） | T0.1 | **新增** `packages/opencode/src/session/context-request-log.test.ts`（或同目录 test 约定）：脱敏、禁用时不写盘、启用时文件非空 | `bun test` 绿 |
 | **T1.2** | 在 `LLM.stream` 内、`streamText` 前调用 logger | `packages/opencode/src/session/llm.ts` | T1.1 | 同上 + 若有 mock `streamText` 的既有模式则跟；否则以 T1.1 + 手工 smoke 为准 | `bun test` 绿；开启 env 时跑一次真实 `opencode` 对话可见文件增长 |
 
-- [ ] T1.1  
-- [ ] T1.2
+- [x] T1.1  
+- [x] T1.2
 
 ### 阶段 2：文档与互链（约 0.5 天）
 
@@ -130,9 +131,9 @@ sequenceDiagram
 | **T2.2** | 更新 `OpenCode-Loom-MCP-演练沙箱`：增加「开启上下文日志」一小节 | `docs/技术文档/OpenCode-Loom-MCP-演练沙箱.md` | T2.1 | 文档豁免 | 同上 |
 | **T2.3** | 将本文 **状态** 改为「进行中 / 已完成」并写 **修订记录** | 本文件 | T1.2 | 豁免 | 与事实一致 |
 
-- [ ] T2.1  
-- [ ] T2.2  
-- [ ] T2.3
+- [x] T2.1  
+- [x] T2.2  
+- [x] T2.3
 
 ### 阶段 3（可选）：上游与产品化
 
@@ -180,6 +181,8 @@ sequenceDiagram
 3. 按 **`OpenCode-Loom-MCP-演练沙箱`** 起沙箱 + 设置 `OPENCODE_CONTEXT_LOG_DIR`，跑 **至少一轮** 含 `loom_index` 的对话后，目录中出现 **可解析** 的日志文件，且内容含 **messages 与 tools 相关字段**。  
 4. Loom 文档互链（§4 阶段 2）已更新。
 
+**验收结论（2026-03-21）**：上述 1–4 已在 **本机 OpenCode fork** 与 **Loom** 联调中满足；可选自动化复跑：`npm run test:e2e-opencode`（需 `OPENCODE_PACKAGE_DIR`），结果归档含 `context-request-log/**/requests.jsonl` 副本。离线样例（不调模型）：`npm run demo:opencode-context-log`。
+
 ---
 
 ## 9. 后续演进
@@ -193,4 +196,4 @@ sequenceDiagram
 
 | 日期 | 说明 |
 |------|------|
-| 2026-03-22 | 初稿：OpenCode fork 分支策略、挂载点、`bun test` 门禁、与 Loom 文档互链任务。 |
+| 2026-03-21 | 初稿 + **结案**：OpenCode fork 策略与挂载点、`bun test` 门禁、Loom 文档互链；后随实现将状态改为已完成，勾选 T0.1–T2.3，更新 §8 验收结论与 `大模型视角` §7.5。阶段 3（上游 PR / Config 开关）仍为可选。 |

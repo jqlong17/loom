@@ -55,3 +55,4 @@
 - 新增 **`tests/e2e-opencode-sandbox/`**：`cases.json` 多用例、`runner.mjs` 驱动源码 OpenCode `run`、每轮结果归档至 `results/run-YYYYMMDD-HHmmss-<hex>/`（含 `manifest.json`、`SUMMARY.md`、各用例 stdout/stderr、可选 `requests.jsonl` 副本），入口 `npm run test:e2e-opencode`，目的是对真实 MCP 工具链做可重复、可审计的 E2E。
 - 新增 **`docs/跨项目可复用经验/`**（`模式-宿主CLI与MCP隔离沙箱-E2E.md`）：将「隔离沙箱 + 宿主 CLI + stdio MCP + 非交互一轮 + 产物归档」抽象为可迁移模式并指向本仓库具体路径，目的是其他项目可低成本复刻同类测试。
 - `package.json` 增加 `test:e2e-opencode` / `demo:opencode-context-log`；`.gitignore` 继续忽略 `.sandbox-output/` 与 E2E 结果产物默认规则（`results/.gitignore`）。
+- **`docs/执行计划/03-opencode-context-request-logging.md`**：状态改为 **已完成**，勾选阶段 0–2 全部 Task，§8 增加验收结论；**`大模型视角` §7.5** 同步为已实现说明（含 `test:e2e-opencode` / `demo:opencode-context-log` 入口）。
