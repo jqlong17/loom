@@ -5,7 +5,7 @@
 | 状态 | **阶段 0–1 已落地**（读路径默认有界 + 配置/env；阶段 2/3 仍可选） |
 | 创建 | 2026-03-20 |
 | 负责人 / 协作方 | （可选，尚未指定） |
-| 关联文档 | [`执行计划/00-meta-plan-writing-convention.md`](./00-meta-plan-writing-convention.md)（**本文遵循之，含 §5 Task / §6 TDD**）、[`计划草稿/02-mcp-context-pollution-and-token-cost.md`](../计划草稿/02-mcp-context-pollution-and-token-cost.md)（主题同源草稿）、[`调研/上下文工程-核心观点与对Loom的启发.md`](../调研/上下文工程-核心观点与对Loom的启发.md)、[`待整理/PROMPTS.md`](../待整理/PROMPTS.md)、[`执行计划/01-prompt-sandbox-llm-eval-harness.md`](./01-prompt-sandbox-llm-eval-harness.md) |
+| 关联文档 | [`执行计划/00-meta-plan-writing-convention.md`](./00-meta-plan-writing-convention.md)（**本文遵循之，含 §5 Task / §6 TDD**）、[`计划草稿/02-mcp-context-pollution-and-token-cost.md`](../计划草稿/02-mcp-context-pollution-and-token-cost.md)（主题同源草稿）、[`调研/上下文工程-核心观点与对Loom的启发.md`](../调研/上下文工程-核心观点与对Loom的启发.md)、[`待整理/PROMPTS.md`](../待整理/PROMPTS.md)、[`执行计划/01-prompt-sandbox-llm-eval-harness.md`](./01-prompt-sandbox-llm-eval-harness.md)、[`执行计划/03-opencode-context-request-logging.md`](./03-opencode-context-request-logging.md)（宿主侧请求可观测） |
 
 **约定**：章节划分对齐 `00` 的 §4.1–§4.10；文件名为 **`02-…`**（与 `01-` 递增编号一致）。
 

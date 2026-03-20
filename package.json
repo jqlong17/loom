@@ -23,6 +23,7 @@
     "release:major": "npm version major && git push --follow-tags",
     "changelog:auto": "tsx scripts/changelog-auto.ts",
     "cli": "node dist/cli.js",
+    "sandbox:opencode": "bash scripts/opencode-loom-sandbox/setup.sh",
     "hooks:install": "bash scripts/hooks-install.sh"
   },
   "keywords": [

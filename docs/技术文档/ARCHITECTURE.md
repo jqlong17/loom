@@ -93,6 +93,7 @@ flowchart TB
     GL[git-manager.ts]
     CH[changelog.ts]
     CFG[config.ts]
+    MRB[mcp-read-bounds.ts]
   end
 
   subgraph Data[数据层]
@@ -140,12 +141,16 @@ flowchart TB
   UC3 --> EVT
   UC4 --> EVT
 
+  CFG --> MRB
+
   W --> L1
   PBE --> L1
   EVT --> L2
   UC6 --> L3
   CH --> L4
 ```
+
+**基础设施补充**：`config.ts` 提供 `mcpReadLimits`（及 `LOOM_MCP_*` 环境变量覆盖）；`mcp-read-bounds.ts` 提供列表截断与 Markdown 截断的纯函数。**MCP**（`index.ts`）与 **CLI**（`cli.ts`）在读类响应组装阶段共用上述配置与工具；`weaver.trace` 在调用方未传有效 `limit` 时仍应用与默认常量一致的结果条数上界，避免 legacy 全量返回。
 
 ---
 
@@ -178,6 +183,7 @@ sequenceDiagram
     Core->>Event: 追加流程事件
   else L3 观测触发（trace/doctor/metrics）
     User->>Entry: 发起检索/体检/指标命令
+    Entry->>Entry: 读类工具：按 mcpReadLimits 解析 limit / 列表 cap / 索引截断
     Entry->>Usecase: 参数映射与校验
     Usecase->>Core: 执行查询或治理
     Core->>Event: 写入观测事件
@@ -195,15 +201,27 @@ sequenceDiagram
 - **L2 流程触发**：把“人记得做”变成“流程保证做”（closeout、hook、CI 脚本）。
 - **L3 观测触发**：不一定写正文，但会记录事件/快照用于治理与复盘。
 - **索引事件闭环**：每次索引重建与检索都会写入事件（`index.rebuilt` / `index.query.executed`），用于衡量索引新鲜度与可用性。
+- **读路径返回有界**：`loom_list` / `loom_trace` / `loom_index`（Full Index 段）在**入口层**按配置做默认截断，与「渐进披露、控制单次 tool 体积」一致；细节见下节。
 
 ---
 
 ## 04. 架构硬核点（简版）
 
 - **双入口同核**：CLI 与 MCP 共享同一用例/核心能力，避免逻辑分叉。
+- **读路径默认有界**：`.loomrc.json` 的 `mcpReadLimits` + `LOOM_MCP_LIST_MAX_ENTRIES` / `LOOM_MCP_TRACE_DEFAULT_LIMIT` / `LOOM_MCP_INDEX_FULL_MAX_CHARS`；`mcp-read-bounds.ts` 与 `resolveTraceLimit` 保证 **CLI `list`/`trace` 与 MCP 同策略**，`weaver.trace` 对缺省 `limit` 的 layered/legacy 一致 capped。
 - **可审计记忆**：Markdown + Git，天然支持 review、diff、回滚。
 - **可治理闭环**：doctor + events + metrics snapshot/report，支持持续优化。
 - **可扩展演进**：当前已具备 domain/usecase/contracts 分层，可平滑扩到 HTTP/Daemon。
+
+### 04.1 配置项与代码锚点（读路径）
+
+| 能力 | 默认语义（可配置） | 主要代码 |
+|------|-------------------|----------|
+| 列表概览 | 按 `updated` 新近优先，最多 `listMaxEntries` 条 | `applyListEntryCap`，MCP `loom_list` / CLI `list` |
+| 检索 | 未传 `limit` 时使用 `traceDefaultLimit`（layered / legacy） | `resolveTraceLimit` + `weaver.trace` |
+| 索引工具 | 「### Full Index」正文最多 `indexFullMaxChars` 字符 | `truncateMarkdownForContext`，MCP `loom_index` |
+
+完整执行说明与验收见 `docs/执行计划/02-mcp-context-footprint-and-bounded-reads.md`；产品侧「宿主 vs Loom」责任划界见 `docs/待整理/PROMPTS.md` §3.1。
 
 ---
 
@@ -224,7 +242,7 @@ flowchart LR
   end
 
   subgraph L3[L3 观测与治理触发]
-    T7[loom_trace<br/>检索记忆并记事件<br/>输出 why_matched 解释]
+    T7[loom_trace<br/>检索并记事件<br/>默认 limit 可配置<br/>layered/legacy 均有界]
     T8[loom_doctor<br/>质量体检门禁]
     T9[loom_events<br/>查询事件流]
     T10[loom_metrics_snapshot<br/>生成指标快照]
@@ -232,9 +250,9 @@ flowchart LR
   end
 
   subgraph AUX[辅助工具]
-    A1[loom_index<br/>索引与必读集合]
+    A1[loom_index<br/>必读集合 + Full Index<br/>正文字符有界]
     A2[loom_read<br/>读取全文]
-    A3[loom_list<br/>列出条目]
+    A3[loom_list<br/>列出条目<br/>条数有界 + 截断提示]
     A4[loom_log<br/>查看知识历史]
     A5[loom_sync<br/>同步远程仓库]
     A6[loom_upgrade<br/>升级 Loom 本体]
@@ -294,3 +312,11 @@ flowchart LR
 ### 一句话看懂这张图
 
 - 工具不是孤立能力：每个 tool 都映射到统一 usecase，再统一沉淀到 Markdown/事件/指标/Git 产物。
+
+---
+
+## 06. 相关文档
+
+- **从模型视角理解「每轮上下文」与如何模拟 / 记录**：[大模型视角-上下文与可观测性.md](./大模型视角-上下文与可观测性.md)
+- **OpenCode + Loom MCP 单轮对话演练沙箱**：[OpenCode-Loom-MCP-演练沙箱.md](./OpenCode-Loom-MCP-演练沙箱.md)（`npm run sandbox:opencode`）
+- **OpenCode 侧请求上下文落盘（执行计划）**：[执行计划/03-opencode-context-request-logging.md](../执行计划/03-opencode-context-request-logging.md)

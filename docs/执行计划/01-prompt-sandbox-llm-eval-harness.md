@@ -5,7 +5,7 @@
 | 状态        | 草案（待实施）                                                                                                                                                                                             |
 | 创建        | 2026-03-18                                                                                                                                                                                          |
 | 负责人 / 协作方 | （可选，尚未指定）                                                                                                                                                                                           |
-| 关联文档      | [`执行计划/00-meta-plan-writing-convention.md`](./00-meta-plan-writing-convention.md)（**结构约定，本文遵循之**）、[`待整理/PROMPTS.md`](../待整理/PROMPTS.md)、[`待整理/CURSOR_HINTS.md`](../待整理/CURSOR_HINTS.md)、[`待整理/TEST_SET.md`](../待整理/TEST_SET.md)、[`待整理/METRIC_EVENT_MAPPING.md`](../待整理/METRIC_EVENT_MAPPING.md)、[`待整理/ARCHITECTURE.md`](../待整理/ARCHITECTURE.md)、[`待整理/ROADMAP.md`](../待整理/ROADMAP.md) |
+| 关联文档      | [`执行计划/00-meta-plan-writing-convention.md`](./00-meta-plan-writing-convention.md)（**结构约定，本文遵循之**）、[`执行计划/03-opencode-context-request-logging.md`](./03-opencode-context-request-logging.md)（OpenCode 内请求落盘，可与 Harness 并行）、[`待整理/PROMPTS.md`](../待整理/PROMPTS.md)、[`待整理/CURSOR_HINTS.md`](../待整理/CURSOR_HINTS.md)、[`待整理/TEST_SET.md`](../待整理/TEST_SET.md)、[`待整理/METRIC_EVENT_MAPPING.md`](../待整理/METRIC_EVENT_MAPPING.md)、[`待整理/ARCHITECTURE.md`](../待整理/ARCHITECTURE.md)、[`待整理/ROADMAP.md`](../待整理/ROADMAP.md) |
 
 **约定**：章节划分与必填模块对齐 `00` 的 §4.1–§4.10；文件命名符合 `00` §2（本文件为 `01-…`）。
 

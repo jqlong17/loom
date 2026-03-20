@@ -61,7 +61,7 @@ prompts/
 | 侧 | 主要负责什么 | 典型手段 |
 |----|----------------|----------|
 | **Loom** | 单次 **tool 返回体** 默认有界；工具说明/资源正文长度（`prompts/`）；错误信息不过度冗长 | `mcpReadLimits`（`loom_list` 条数上限、`loom_trace` 默认 `limit`、`loom_index` 中 Full Index 字符上限）；渐进披露（先 index / trace，再 `loom_read`） |
-| **宿主（Cursor / 其他 MCP 客户端）** | **连接后常驻**的工具 schema + 描述总体积；多轮对话 **历史裁剪**；多 MCP 并存时的上下文叠加 | 客户端设置、系统提示、插件与子集工具配置（若有） |
+| **宿主（以 OpenCode 为主；亦含 Cursor 等其它 MCP 客户端）** | **连接后常驻**的工具 schema + 描述总体积；多轮对话 **历史裁剪 / compaction**；多 MCP 并存时的上下文叠加 | `opencode.json`、Agent 与权限、系统提示、插件等（因客户端而异） |
 
 **说明**：磁盘上的 `fullConversationLogging` 等全量落盘 **不等于** 进入模型上下文；与「单次 MCP 返回」需分开理解。
 
