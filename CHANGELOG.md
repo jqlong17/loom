@@ -38,3 +38,12 @@
 - 完成 `loom-memory@0.1.0` npm 首发并验证全局/本地安装路径，同时在 README 增加 npm 最短安装说明，目的是让 OpenCode 等用户可以一键安装并快速接入 Loom。
 - 新增 `loom_events` / `loom_metrics_report` 与事件回放测试，并补齐 `metrics.snapshot.v1` 的 M1/M2/M3 映射，目的是把“事件采集”升级为“可复盘、可决策”的数据闭环。
 - 新增 GitHub Actions `release-npm.yml` 与 Trusted Publishing 发布流程（tag 触发），目的是让 npm 发布摆脱手工 OTP 流程并实现稳定自动化发版。
+
+## 2026-03-22
+
+- 新增 **MCP 读路径有界化**：`.loomrc.json` 中 `mcpReadLimits`（`listMaxEntries` / `traceDefaultLimit` / `indexFullMaxChars`）及环境变量 `LOOM_MCP_*` 覆盖，目的是在默认参数下控制单次 tool 返回体积并降低上下文污染与 Token 成本。
+- **`loom_list`**：按 `updated` 新近优先展示，默认条数上限（截断时提示总数与本次条数），目的是大盘知识库下仍能安全做条目概览。
+- **`loom_trace`**：`layered` 与 **legacy** 在未传 `limit` 时共用配置化默认上界；**`loom-cli trace`** 与 MCP 共用同一解析逻辑，目的是避免 legacy 全量命中与双入口行为分叉。
+- **`loom_index`**：对「### Full Index」正文按字符上限截断并附下一步指引（`loom_read` / `loom_trace`），目的是在渐进披露策略下压缩索引大块返回。
+- 补充执行计划与提示词文档（`docs/执行计划/02-mcp-context-footprint-and-bounded-reads.md`、`PROMPTS.md` 中宿主 vs Loom 责任划界）及 `prompts/zh/v1/tools` 说明，目的是让默认上界可被查阅、可被运营侧理解。
+- 新增 `tests/mcp-bounded-reads.test.ts` 覆盖列表截断、legacy 默认 cap、配置 env 等，目的是让有界策略具备可回归基线。

@@ -1,7 +1,11 @@
 import * as path from "path";
 import * as fs from "fs/promises";
 import { describe, expect, it } from "vitest";
-import { ensureLoomStructure, type LoomConfig } from "../src/config.js";
+import {
+  ensureLoomStructure,
+  MCP_READ_LIMITS_DEFAULTS,
+  type LoomConfig,
+} from "../src/config.js";
 import { GitManager } from "../src/git-manager.js";
 import { executeIngestKnowledge } from "../src/app/usecases/ingest-knowledge.js";
 import { executeRunDoctor } from "../src/app/usecases/run-doctor.js";
@@ -18,6 +22,15 @@ const TEST_CONFIG: LoomConfig = {
   autoPush: false,
   branch: "main",
   commitPrefix: "loom",
+  fullConversationLogging: {
+    enabled: false,
+    storageDir: "raw_conversations",
+    redact: true,
+    maxPayloadChars: 12000,
+  },
+  mcpReadLimits: { ...MCP_READ_LIMITS_DEFAULTS },
+  promptVersion: "v1",
+  promptLocale: "zh",
 };
 
 describe("application usecases", () => {

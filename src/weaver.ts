@@ -1,6 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import { type LoomCategory } from "./config.js";
+import { MCP_READ_LIMITS_DEFAULTS, type LoomCategory } from "./config.js";
 import { slugify } from "./utils/slug.js";
 import { appendEvent } from "./events.js";
 
@@ -368,16 +368,25 @@ export function charsToTokenEstimate(chars: number): number {
   return Math.max(0, Math.ceil(chars / 4));
 }
 
+function effectiveTraceResultCap(options: TraceOptions): number {
+  if (options.limit !== undefined && options.limit > 0) {
+    return Math.floor(options.limit);
+  }
+  return MCP_READ_LIMITS_DEFAULTS.traceDefaultLimit;
+}
+
 export async function trace(
   loomRoot: string,
   query: string,
   options: TraceOptions = {},
 ): Promise<TraceResult[]> {
   const mode = options.traceMode ?? "layered";
+  const resolvedLimit = effectiveTraceResultCap(options);
+  const merged: TraceOptions = { ...options, limit: resolvedLimit };
   const { results, contextChars } =
     mode === "legacy"
-      ? await traceLegacy(loomRoot, query, options)
-      : await traceLayered(loomRoot, query, options);
+      ? await traceLegacy(loomRoot, query, merged)
+      : await traceLayered(loomRoot, query, merged);
   const retrievedChars = results.reduce((s, r) => s + r.snippet.length, 0);
   const contextTokens = charsToTokenEstimate(contextChars);
   const tokenROI =
@@ -391,7 +400,7 @@ export async function trace(
         mode,
         category: options.category,
         tags: options.tags,
-        limit: options.limit,
+        limit: resolvedLimit,
         count: results.length,
         contextChars,
         retrievedChars,
@@ -472,10 +481,8 @@ async function traceLegacy(
     return Date.parse(b.updated || "") - Date.parse(a.updated || "");
   });
 
-  const limited =
-    options.limit && options.limit > 0
-      ? results.slice(0, options.limit)
-      : results;
+  const cap = effectiveTraceResultCap(options);
+  const limited = results.slice(0, cap);
   return { results: limited, contextChars };
 }
 
@@ -484,7 +491,7 @@ async function traceLayered(
   query: string,
   options: TraceOptions,
 ): Promise<{ results: TraceResult[]; contextChars: number }> {
-  const limit = options.limit && options.limit > 0 ? options.limit : 10;
+  const limit = effectiveTraceResultCap(options);
   let contextChars = 0;
   const terms = query
     .toLowerCase()

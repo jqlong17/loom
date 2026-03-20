@@ -1,6 +1,22 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 
+/** 默认 MCP 读路径上界；可被 `.loomrc.json` 的 `mcpReadLimits` 与 `LOOM_MCP_*` 环境变量覆盖。 */
+export const MCP_READ_LIMITS_DEFAULTS = {
+  /** loom_list / CLI list：按 `updated` 新近优先，最多返回条数 */
+  listMaxEntries: 100,
+  /** 未传 `limit` 时 trace 的默认条数（layered / legacy 一致） */
+  traceDefaultLimit: 10,
+  /** loom_index 中「Full Index」正文最大字符数 */
+  indexFullMaxChars: 16000,
+} as const;
+
+export type McpReadLimits = {
+  listMaxEntries: number;
+  traceDefaultLimit: number;
+  indexFullMaxChars: number;
+};
+
 export interface LoomConfig {
   /** Root directory for .loom knowledge base */
   loomDir: string;
@@ -19,6 +35,8 @@ export interface LoomConfig {
     redact: boolean;
     maxPayloadChars: number;
   };
+  /** MCP 读路径条数/字符上界（list / trace 默认 limit / index 全文索引段） */
+  mcpReadLimits: McpReadLimits;
   /** MCP 提示词版本目录名，如 v1、v2（见 prompts/<locale>/<version>/） */
   promptVersion: string;
   /** 预留：zh | en */
@@ -37,17 +55,48 @@ const DEFAULT_CONFIG: LoomConfig = {
     redact: true,
     maxPayloadChars: 12000,
   },
+  mcpReadLimits: { ...MCP_READ_LIMITS_DEFAULTS },
   promptVersion: "v1",
   promptLocale: "zh",
 };
 
 const CONFIG_FILE = ".loomrc.json";
 
+function envPositiveInt(name: string): number | undefined {
+  const v = process.env[name];
+  if (v === undefined || v === "") return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.floor(n);
+}
+
+/** 解析 trace / 其他 limit：无效或缺失时用 fallback。 */
+export function resolveTraceLimit(
+  limit: number | undefined,
+  fallback: number,
+): number {
+  if (limit !== undefined && Number.isFinite(limit) && limit > 0) {
+    return Math.floor(limit);
+  }
+  return Math.max(1, Math.floor(fallback));
+}
+
 export async function loadConfig(workDir: string): Promise<LoomConfig> {
   const configPath = path.join(workDir, CONFIG_FILE);
   try {
     const raw = await fs.readFile(configPath, "utf-8");
     const userConfig = JSON.parse(raw) as Partial<LoomConfig>;
+    const mcpFromFile: McpReadLimits = {
+      listMaxEntries:
+        userConfig.mcpReadLimits?.listMaxEntries ??
+        DEFAULT_CONFIG.mcpReadLimits.listMaxEntries,
+      traceDefaultLimit:
+        userConfig.mcpReadLimits?.traceDefaultLimit ??
+        DEFAULT_CONFIG.mcpReadLimits.traceDefaultLimit,
+      indexFullMaxChars:
+        userConfig.mcpReadLimits?.indexFullMaxChars ??
+        DEFAULT_CONFIG.mcpReadLimits.indexFullMaxChars,
+    };
     return {
       ...DEFAULT_CONFIG,
       ...userConfig,
@@ -55,11 +104,34 @@ export async function loadConfig(workDir: string): Promise<LoomConfig> {
         ...DEFAULT_CONFIG.fullConversationLogging,
         ...(userConfig.fullConversationLogging ?? {}),
       },
+      mcpReadLimits: {
+        listMaxEntries:
+          envPositiveInt("LOOM_MCP_LIST_MAX_ENTRIES") ?? mcpFromFile.listMaxEntries,
+        traceDefaultLimit:
+          envPositiveInt("LOOM_MCP_TRACE_DEFAULT_LIMIT") ??
+          mcpFromFile.traceDefaultLimit,
+        indexFullMaxChars:
+          envPositiveInt("LOOM_MCP_INDEX_FULL_MAX_CHARS") ??
+          mcpFromFile.indexFullMaxChars,
+      },
       promptVersion: userConfig.promptVersion ?? DEFAULT_CONFIG.promptVersion,
       promptLocale: userConfig.promptLocale ?? DEFAULT_CONFIG.promptLocale,
     };
   } catch {
-    return { ...DEFAULT_CONFIG };
+    return {
+      ...DEFAULT_CONFIG,
+      mcpReadLimits: {
+        listMaxEntries:
+          envPositiveInt("LOOM_MCP_LIST_MAX_ENTRIES") ??
+          DEFAULT_CONFIG.mcpReadLimits.listMaxEntries,
+        traceDefaultLimit:
+          envPositiveInt("LOOM_MCP_TRACE_DEFAULT_LIMIT") ??
+          DEFAULT_CONFIG.mcpReadLimits.traceDefaultLimit,
+        indexFullMaxChars:
+          envPositiveInt("LOOM_MCP_INDEX_FULL_MAX_CHARS") ??
+          DEFAULT_CONFIG.mcpReadLimits.indexFullMaxChars,
+      },
+    };
   }
 }
 

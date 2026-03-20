@@ -41,14 +41,29 @@ prompts/
 ```json
 {
   "promptVersion": "v1",
-  "promptLocale": "zh"
+  "promptLocale": "zh",
+  "mcpReadLimits": {
+    "listMaxEntries": 100,
+    "traceDefaultLimit": 10,
+    "indexFullMaxChars": 16000
+  }
 }
 ```
 
 - **`promptVersion`**：选用哪套提示词目录（如 `v1`、`v2`）。
 - **`promptLocale`**：预留；当前固定 `zh` 即可，未来加 `en` 时并列 `prompts/en/v1/`。
+- **`mcpReadLimits`**（可选）：控制 MCP **读路径**默认上界，降低单次 tool 返回对模型上下文的占用。缺省见 `src/config.ts` 中 `MCP_READ_LIMITS_DEFAULTS`。可用环境变量覆盖：`LOOM_MCP_LIST_MAX_ENTRIES`、`LOOM_MCP_TRACE_DEFAULT_LIMIT`、`LOOM_MCP_INDEX_FULL_MAX_CHARS`（正整数）。
 
 **覆盖优先级**：`LOOM_PROMPT_VERSION` / `LOOM_PROMPT_LOCALE`（环境变量）> `.loomrc.json` 的 `promptVersion` / `promptLocale` > `manifest.defaultVersion` / `manifest.locales[0]`。便于 CI / 脚本里「同一命令跑两遍、只改环境变量」做 A/B。
+
+### 3.1 上下文与 Token：分层责任（宿主 vs Loom）
+
+| 侧 | 主要负责什么 | 典型手段 |
+|----|----------------|----------|
+| **Loom** | 单次 **tool 返回体** 默认有界；工具说明/资源正文长度（`prompts/`）；错误信息不过度冗长 | `mcpReadLimits`（`loom_list` 条数上限、`loom_trace` 默认 `limit`、`loom_index` 中 Full Index 字符上限）；渐进披露（先 index / trace，再 `loom_read`） |
+| **宿主（Cursor / 其他 MCP 客户端）** | **连接后常驻**的工具 schema + 描述总体积；多轮对话 **历史裁剪**；多 MCP 并存时的上下文叠加 | 客户端设置、系统提示、插件与子集工具配置（若有） |
+
+**说明**：磁盘上的 `fullConversationLogging` 等全量落盘 **不等于** 进入模型上下文；与「单次 MCP 返回」需分开理解。
 
 ## 4. Markdown 文件内结构（建议）
 

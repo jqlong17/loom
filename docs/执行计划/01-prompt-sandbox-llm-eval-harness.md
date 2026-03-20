@@ -5,11 +5,11 @@
 | 状态        | 草案（待实施）                                                                                                                                                                                             |
 | 创建        | 2026-03-18                                                                                                                                                                                          |
 | 负责人 / 协作方 | （可选，尚未指定）                                                                                                                                                                                           |
-| 关联文档      | `docs/plans/00-meta-plan-writing-convention.md`（**结构约定，本文遵循之**）、`docs/PROMPTS.md`、`docs/CURSOR_HINTS.md`、`docs/TEST_SET.md`、`docs/METRIC_EVENT_MAPPING.md`、`docs/ARCHITECTURE.md`、`docs/ROADMAP.md` |
+| 关联文档      | [`执行计划/00-meta-plan-writing-convention.md`](./00-meta-plan-writing-convention.md)（**结构约定，本文遵循之**）、[`待整理/PROMPTS.md`](../待整理/PROMPTS.md)、[`待整理/CURSOR_HINTS.md`](../待整理/CURSOR_HINTS.md)、[`待整理/TEST_SET.md`](../待整理/TEST_SET.md)、[`待整理/METRIC_EVENT_MAPPING.md`](../待整理/METRIC_EVENT_MAPPING.md)、[`待整理/ARCHITECTURE.md`](../待整理/ARCHITECTURE.md)、[`待整理/ROADMAP.md`](../待整理/ROADMAP.md) |
 
 **约定**：章节划分与必填模块对齐 `00` 的 §4.1–§4.10；文件命名符合 `00` §2（本文件为 `01-…`）。
 
-**在仓库文档体系中的位置**：本 plan 是专题落地拆解；长期方向见 `docs/ROADMAP.md`，任务总表可与 `docs/IMPLEMENTATION_PLAN.md` 互链；提示词与 MCP 行为背景见 `docs/PROMPTS.md`、`.loom/decisions/mcp-and-cli-prompt-sources-kept-separate.md`。
+**在仓库文档体系中的位置**：本 plan 是专题落地拆解；长期方向见 [`待整理/ROADMAP.md`](../待整理/ROADMAP.md)，任务总表可与 [`待整理/IMPLEMENTATION_PLAN.md`](../待整理/IMPLEMENTATION_PLAN.md) 互链；提示词与 MCP 行为背景见 [`待整理/PROMPTS.md`](../待整理/PROMPTS.md)、`.loom/decisions/mcp-and-cli-prompt-sources-kept-separate.md`。
 
 ***
 
@@ -17,7 +17,7 @@
 
 ### 1.1 产品 / 技术上下文
 
-Loom 同时提供 **MCP**（对话中由模型调工具写读 `.loom/`）与 **CLI**（人/脚本显式执行）。影响「模型是否按预期使用 Loom」的文案集中在 `prompts/<locale>/<version>/`（工具说明、`loom-instructions` 等），可通过 `promptVersion` / 环境变量切换版本做对比（见 `docs/PROMPTS.md`）。
+Loom 同时提供 **MCP**（对话中由模型调工具写读 `.loom/`）与 **CLI**（人/脚本显式执行）。影响「模型是否按预期使用 Loom」的文案集中在 `prompts/<locale>/<version>/`（工具说明、`loom-instructions` 等），可通过 `promptVersion` / 环境变量切换版本做对比（见 [`待整理/PROMPTS.md`](../待整理/PROMPTS.md)）。
 
 ### 1.2 已暴露的问题或机会
 
@@ -210,7 +210,7 @@ flowchart LR
 
 ## 5. 待与用户澄清的问题与建议
 
-写法与「风险」区别见 `docs/plans/00-meta-plan-writing-convention.md` §4.5；澄清结论落地后应记入 **§10 修订记录** 或 `.loom/decisions/`，并回改本表（删除或标记已解决）。
+写法与「风险」区别见 [`执行计划/00-meta-plan-writing-convention.md`](./00-meta-plan-writing-convention.md) §4.5；澄清结论落地后应记入 **§10 修订记录** 或 `.loom/decisions/`，并回改本表（删除或标记已解决）。
 
 **优先级档位（与** **`00`** **一致）**
 

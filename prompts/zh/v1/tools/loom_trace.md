@@ -16,7 +16,7 @@
 
 ## 参数：limit
 
-返回结果数量上限（相关性排序后截断）。
+返回结果数量上限（相关性排序后截断）。**未传时**使用配置项 `mcpReadLimits.traceDefaultLimit`（默认 10），可用环境变量 `LOOM_MCP_TRACE_DEFAULT_LIMIT` 覆盖。`trace_mode=legacy` 与 `layered` 共用该默认上界。
 
 ## 参数：trace_mode
 

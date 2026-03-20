@@ -9,7 +9,12 @@ import {
   loadConfig,
   resolveLoomPath,
   ensureLoomStructure,
+  resolveTraceLimit,
 } from "./config.js";
+import {
+  applyListEntryCap,
+  truncateMarkdownForContext,
+} from "./mcp-read-bounds.js";
 import {
   weave,
   trace,
@@ -801,12 +806,16 @@ server.tool(
       ),
   },
   async ({ query, category, tags, limit, trace_mode }) => {
-    const { loomRoot } = await getRuntimeContext();
+    const { config, loomRoot } = await getRuntimeContext();
+    const effLimit = resolveTraceLimit(
+      limit,
+      config.mcpReadLimits.traceDefaultLimit,
+    );
 
     const results = await trace(loomRoot, query, {
       category,
       tags,
-      limit,
+      limit: effLimit,
       traceMode: trace_mode,
     });
     await appendEvent(loomRoot, {
@@ -858,11 +867,15 @@ server.tool(
   ),
   {},
   async () => {
-    const { loomRoot } = await getRuntimeContext();
+    const { config, loomRoot } = await getRuntimeContext();
     await ensureLoomStructure(loomRoot);
     const RECENT_LIMIT = 5;
     const SNIPPET_LIMIT = 220;
     const index = await rebuildIndex(loomRoot);
+    const { text: indexBody } = truncateMarkdownForContext(
+      index,
+      config.mcpReadLimits.indexFullMaxChars,
+    );
     const recent = await listRecentEntries(loomRoot, RECENT_LIMIT);
     const coreConcepts = await listCoreConcepts(loomRoot);
 
@@ -892,7 +905,7 @@ server.tool(
       recentSection,
       "",
       "### Full Index",
-      index,
+      indexBody,
     ].join("\n");
 
     return {
@@ -1278,8 +1291,13 @@ server.tool(
       };
     }
 
-    const grouped: Record<string, typeof all> = {};
-    for (const item of all) {
+    const { shown, total, truncated } = applyListEntryCap(
+      all,
+      config.mcpReadLimits.listMaxEntries,
+    );
+
+    const grouped: Record<string, typeof shown> = {};
+    for (const item of shown) {
       (grouped[item.category] ??= []).push(item);
     }
 
@@ -1292,11 +1310,15 @@ server.tool(
       })
       .join("\n\n");
 
+    const capNote = truncated
+      ? `\n\n> 共 ${total} 条，本次按更新时间仅展示最近 ${shown.length} 条（上限 ${config.mcpReadLimits.listMaxEntries}）。未列出的请用 \`loom_trace\` 或 \`loom_read\` 定位。`
+      : "";
+
     return {
       content: [
         {
           type: "text",
-          text: `Loom Knowledge Base (${all.length} entries):\n\n${formatted}`,
+          text: `Loom Knowledge Base（共 ${total} 条，本次列出 ${shown.length} 条）:\n\n${formatted}${capNote}`,
         },
       ],
     };

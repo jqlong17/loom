@@ -3,7 +3,13 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { fileURLToPath } from "url";
-import { loadConfig, resolveLoomPath, ensureLoomStructure } from "./config.js";
+import {
+  loadConfig,
+  resolveLoomPath,
+  ensureLoomStructure,
+  resolveTraceLimit,
+} from "./config.js";
+import { applyListEntryCap } from "./mcp-read-bounds.js";
 import {
   weave,
   trace,
@@ -399,6 +405,10 @@ async function main(): Promise<void> {
     case "trace": {
       const query = asString(args, "query");
       if (!query) fail("trace requires --query");
+      const effLimit = resolveTraceLimit(
+        asNumber(args, "limit"),
+        config.mcpReadLimits.traceDefaultLimit,
+      );
       const results = await trace(loomRoot, query, {
         category: asString(args, "category") as
           | "concepts"
@@ -406,7 +416,7 @@ async function main(): Promise<void> {
           | "threads"
           | undefined,
         tags: asList(args, "tags"),
-        limit: asNumber(args, "limit"),
+        limit: effLimit,
         traceMode: asString(args, "traceMode") as "legacy" | "layered" | undefined,
       });
       await appendEvent(loomRoot, {
@@ -457,7 +467,21 @@ async function main(): Promise<void> {
 
     case "list": {
       const items = await listAll(loomRoot);
-      print({ ok: true, count: items.length, items }, jsonMode);
+      const { shown, total, truncated } = applyListEntryCap(
+        items,
+        config.mcpReadLimits.listMaxEntries,
+      );
+      print(
+        {
+          ok: true,
+          count: shown.length,
+          total,
+          truncated,
+          cap: config.mcpReadLimits.listMaxEntries,
+          items: shown,
+        },
+        jsonMode,
+      );
       return;
     }
 
